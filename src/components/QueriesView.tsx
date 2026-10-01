@@ -267,7 +267,8 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
                       <button
                         type="button"
                         onClick={() => startRename(qs)}
-                        className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-zinc-300 p-1 rounded transition-opacity"
+                        className="query-set-rename shrink-0 text-zinc-500 hover:text-zinc-300 p-1 rounded transition-opacity"
+                        aria-label="Rename query set"
                         title="Rename query set"
                       >
                         <Edit2 className="w-3 h-3" />

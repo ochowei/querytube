@@ -24,3 +24,22 @@
   }
 }
 
+/* Keep compact desktop controls, with larger targets on phones and touch screens. */
+@media (max-width: 639px), (any-pointer: coarse) {
+  button:not([role="switch"]) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Hide this secondary action only when hover is available on a desktop. */
+@media (min-width: 640px) and (hover: hover) and (pointer: fine) {
+  .query-set-rename {
+    opacity: 0;
+  }
+
+  .group:hover .query-set-rename,
+  .group:focus-within .query-set-rename {
+    opacity: 1;
+  }
+}
