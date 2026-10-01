@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile for authenticated Google users",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Firebase user UID"
+        },
+        "email": {
+          "type": "string",
+          "description": "Google account email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User's display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User's profile photo URL"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the user first logged in"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "description": "Timestamp of the most recent login"
+        }
+      },
+      "required": ["id", "email"]
+    },
+    "YouTubeIntegration": {
+      "title": "YouTubeIntegration",
+      "description": "Per-user encrypted YouTube Data API key secret document (server-only access)",
+      "type": "object",
+      "properties": {
+        "encryptedApiKey": {
+          "type": "string",
+          "description": "AES-256-GCM ciphertext encoded in base64"
+        },
+        "iv": {
+          "type": "string",
+          "description": "AES-256-GCM initialization vector encoded in base64"
+        },
+        "authTag": {
+          "type": "string",
+          "description": "AES-256-GCM authentication tag encoded in base64"
+        },
+        "keyVersion": {
+          "type": "number",
+          "description": "Version of the encryption key"
+        },
+        "keySuffix": {
+          "type": "string",
+          "description": "Last 4 characters of the API key for user display"
+        },
+        "verifiedAt": {
+          "type": "string",
+          "description": "ISO timestamp when the API key was verified against YouTube Data API v3"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp when the integration was updated"
+        }
+      },
+      "required": [
+        "encryptedApiKey",
+        "iv",
+        "authTag",
+        "keyVersion",
+        "keySuffix",
+        "verifiedAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profile data, readable and writable only by the account owner."
+    },
+    "/users/{userId}/integrations/youtube": {
+      "schema": "YouTubeIntegration",
+      "description": "Stores per-user encrypted YouTube Data API key, accessible only via server-side Admin SDK."
+    }
+  }
+}

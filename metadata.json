@@ -1,0 +1,6 @@
+{
+  "name": "YouTube YAML Search",
+  "description": "Batch search YouTube with multiple queries defined in YAML and export normalized results.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
