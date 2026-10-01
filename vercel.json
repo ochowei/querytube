@@ -3,10 +3,7 @@
   "buildCommand": "bun run build",
   "functions": {
     "server.ts": {
-      "includeFiles": [
-        "openapi/public-api.yaml",
-        "public/index.html"
-      ]
+      "includeFiles": "{openapi/public-api.yaml,public/index.html}"
     }
   }
 }
