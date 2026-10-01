@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "express",
-  "buildCommand": "bun run build"
+  "buildCommand": "bun run build",
+  "functions": {
+    "server.ts": {
+      "includeFiles": "{openapi/public-api.yaml,public/index.html}"
+    }
+  }
 }
