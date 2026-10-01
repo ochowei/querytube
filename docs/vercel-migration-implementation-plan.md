@@ -52,7 +52,7 @@
 
 **新增／調整**
 
-- 使用 root `server.ts` 作為 Vercel Node Function entrypoint，匯出同一個 Express app；採用 Vercel Express adapter，不另加 catch-all/rewrite。
+- 使用 root `server.ts` 作為 Vercel Express entrypoint，匯出同一個 Express app；明確設定 `framework: "express"`，採用 Vercel Express adapter，不另加 catch-all/rewrite。
 - 新增最小 `vercel.json`：執行 Vite build，並將 `openapi/public-api.yaml` 與 SPA entry file 納入 Function。Function duration 沿用 Vercel project 設定，不在未知方案下硬編上限；preview 時確認最長正常 SSE request 可在實際 duration 內完成。
 - Vite 改輸出 `public/`，讓 Vercel 透過 CDN 提供靜態檔；Express 不負責 Vercel production 的 `express.static()`。
 - Vercel 靜態檔交由 CDN 提供，非靜態請求需到 Express。舊 production launcher 的最後一條 `app.get('*')` 會把未知 GET path（包含未定義的 `/api/*`）回傳為 SPA；目前 app 保留這個行為。已列出的 API path 必須完全相容；若要調整未知 API path 的 fallback，先確認沒有 client 依賴並把差異限制在未定義路徑。
