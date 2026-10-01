@@ -24,6 +24,17 @@ export default function App() {
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<AppTab>('search');
+  const [apiDocsContext, setApiDocsContext] = useState<{
+    userId?: string;
+    querySetId?: string;
+  }>({});
+
+  const handleTabChange = (tab: AppTab) => {
+    if (tab === 'docs') {
+      setApiDocsContext({});
+    }
+    setActiveTab(tab);
+  };
 
   // YAML editor & execution state
   const [yamlInput, setYamlInput] = useState<string>(SAMPLE_YAMLS.default.yaml);
@@ -751,7 +762,7 @@ export default function App() {
       {/* Top Navigation & Status */}
       <Header
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         keyStatus={userApiKeyStatus}
         checkingKey={checkingKeyStatus}
         onOpenKeySettings={() => setIsKeyModalOpen(true)}
@@ -903,7 +914,10 @@ export default function App() {
             onRenameQuerySet={handleRenameQuerySet}
             onDeleteQuerySet={handleDeleteQuerySet}
             onTogglePublicApi={handleTogglePublicApi}
-            onNavigateToDocs={() => setActiveTab('docs')}
+            onNavigateToDocs={(querySetId) => {
+              setApiDocsContext({ userId: user?.uid, querySetId });
+              setActiveTab('docs');
+            }}
             currentUserId={user?.uid}
           />
         )}
@@ -922,7 +936,10 @@ export default function App() {
 
         {/* Tab 4: API Docs View */}
         {activeTab === 'docs' && (
-          <ApiDocsView />
+          <ApiDocsView
+            userId={apiDocsContext.userId}
+            querySetId={apiDocsContext.querySetId}
+          />
         )}
       </main>
 

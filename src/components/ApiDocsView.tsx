@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import SwaggerUI from 'swagger-ui-react';
 import 'swagger-ui-react/swagger-ui.css';
 import {
@@ -8,15 +8,117 @@ import {
   ExternalLink,
   Code2,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 
-export const ApiDocsView: React.FC = () => {
+interface ApiDocsViewProps {
+  userId?: string;
+  querySetId?: string;
+}
+
+interface OpenApiParameter {
+  name?: string;
+  example?: unknown;
+}
+
+interface OpenApiOperation {
+  parameters?: OpenApiParameter[];
+  [key: string]: unknown;
+}
+
+interface OpenApiDocument {
+  paths?: Record<string, OpenApiOperation>;
+  [key: string]: unknown;
+}
+
+const operationMethods = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
+
+const applyApiDocsContext = (
+  source: OpenApiDocument,
+  userId?: string,
+  querySetId?: string,
+): OpenApiDocument => {
+  // The fetched JSON is plain data, so a JSON clone also works in browsers
+  // without structuredClone and keeps the server-provided document untouched.
+  const contextualSpec = JSON.parse(JSON.stringify(source)) as OpenApiDocument;
+
+  const applyToParameters = (parameters?: OpenApiParameter[]) => {
+    parameters?.forEach((parameter) => {
+      if (parameter.name === 'userId' && userId !== undefined) {
+        parameter.example = userId;
+      } else if (parameter.name === 'querySetId' && querySetId !== undefined) {
+        parameter.example = querySetId;
+      }
+    });
+  };
+
+  Object.values(contextualSpec.paths ?? {}).forEach((pathItem) => {
+    applyToParameters(pathItem.parameters as OpenApiParameter[] | undefined);
+
+    Object.entries(pathItem).forEach(([method, operation]) => {
+      if (!operationMethods.has(method) || !operation || typeof operation !== 'object') return;
+      applyToParameters((operation as OpenApiOperation).parameters);
+    });
+  });
+
+  return contextualSpec;
+};
+
+const getErrorMessage = (error: unknown): string => (
+  error instanceof Error ? error.message : 'An unknown error occurred.'
+);
+
+const formatContextValue = (value: string): string => (
+  value.length > 16 ? `${value.slice(0, 8)}...` : value
+);
+
+export const ApiDocsView: React.FC<ApiDocsViewProps> = ({ userId, querySetId }) => {
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedBase, setCopiedBase] = useState(false);
   const [swaggerKey, setSwaggerKey] = useState(0);
+  const [openApiSpec, setOpenApiSpec] = useState<OpenApiDocument | null>(null);
+  const [isLoadingSpec, setIsLoadingSpec] = useState(true);
+  const [specLoadError, setSpecLoadError] = useState<string | null>(null);
 
   const openApiJsonUrl = `${window.location.origin}/openapi.json`;
   const publicApiBaseUrl = `${window.location.origin}/api/public`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadSpec = async () => {
+      setIsLoadingSpec(true);
+      setSpecLoadError(null);
+      setOpenApiSpec(null);
+
+      try {
+        const response = await fetch('/openapi.json', {
+          cache: 'no-cache',
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`The server returned ${response.status} ${response.statusText}.`);
+        }
+
+        const sourceSpec = await response.json() as OpenApiDocument;
+        const contextualSpec = applyApiDocsContext(sourceSpec, userId, querySetId);
+        if (!controller.signal.aborted) {
+          setOpenApiSpec(contextualSpec);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setSpecLoadError(getErrorMessage(error));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingSpec(false);
+        }
+      }
+    };
+
+    void loadSpec();
+    return () => controller.abort();
+  }, [swaggerKey, userId, querySetId]);
 
   const copyToClipboard = (text: string, isJson: boolean) => {
     navigator.clipboard.writeText(text);
@@ -56,6 +158,22 @@ export const ApiDocsView: React.FC = () => {
             </p>
           </div>
         </div>
+
+        {(userId || querySetId) && (
+          <div className="mr-auto min-w-0 border-l border-zinc-800 pl-3 text-[10px] leading-4 text-zinc-400">
+            <div className="font-semibold uppercase tracking-wide text-zinc-500">Context</div>
+            {userId && (
+              <div title={userId}>
+                User: <span className="font-mono text-zinc-300">{formatContextValue(userId)}</span>
+              </div>
+            )}
+            {querySetId && (
+              <div title={querySetId}>
+                Query Set: <span className="font-mono text-zinc-300">{formatContextValue(querySetId)}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -106,7 +224,20 @@ export const ApiDocsView: React.FC = () => {
 
       {/* Embedded React Swagger UI Container */}
       <div className="flex-1 w-full bg-white rounded-xl border border-zinc-800 overflow-y-auto shadow-md p-2 sm:p-4 text-zinc-900">
-        <SwaggerUI key={swaggerKey} url="/openapi.json" />
+        {isLoadingSpec ? (
+          <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-zinc-600" role="status">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading OpenAPI schema...</span>
+          </div>
+        ) : specLoadError ? (
+          <div className="mx-auto mt-12 max-w-xl rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+            <h3 className="font-semibold">Could not load API documentation</h3>
+            <p className="mt-1">The OpenAPI schema could not be loaded from /openapi.json.</p>
+            <p className="mt-1 text-xs">{specLoadError}</p>
+          </div>
+        ) : openApiSpec ? (
+          <SwaggerUI key={`${swaggerKey}-${userId ?? ''}-${querySetId ?? ''}`} spec={openApiSpec} />
+        ) : null}
       </div>
     </div>
   );

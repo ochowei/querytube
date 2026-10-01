@@ -28,7 +28,7 @@ interface QueriesViewProps {
   onRenameQuerySet: (id: string, newName: string) => Promise<void>;
   onDeleteQuerySet: (id: string) => Promise<void>;
   onTogglePublicApi?: (id: string, enabled: boolean) => Promise<void>;
-  onNavigateToDocs?: () => void;
+  onNavigateToDocs?: (querySetId: string) => void;
   currentUserId?: string | null;
 }
 
@@ -332,7 +332,7 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
                           {onNavigateToDocs && (
                             <button
                               type="button"
-                              onClick={onNavigateToDocs}
+                              onClick={() => onNavigateToDocs(qs.id)}
                               className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[10px] cursor-pointer flex items-center gap-1"
                               title="Open Swagger API Docs in SPA"
                             >
