@@ -1,0 +1,578 @@
+openapi: 3.1.0
+info:
+  title: QueryTube Public API
+  version: 1.0.0
+  description: Public read-only API for accessing QueryTube query sets and historical YouTube search results explicitly shared by their owners.
+servers:
+  - url: /
+    description: Current host server
+paths:
+  /api/public/users/{userId}/query-sets:
+    get:
+      summary: List public Query Sets
+      description: Returns a list of query set summaries for the specified user that have been explicitly enabled for public read access. Does not include raw YAML definitions.
+      operationId: listPublicQuerySets
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The Firebase UID of the query set owner.
+          schema:
+            type: string
+          example: cabeceowei-uid-123
+      responses:
+        '200':
+          description: Successfully retrieved public query sets list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicQuerySetSummary'
+              example:
+                items:
+                  - id: qs_1711892019_abc12
+                    name: WoW Forever Multilingual
+                    queryCount: 18
+                    createdAt: '2026-10-01T01:00:00.000Z'
+                    updatedAt: '2026-10-01T02:00:00.000Z'
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/public/users/{userId}/query-sets/{querySetId}:
+    get:
+      summary: Get public Query Set details
+      description: Returns the full public Query Set, including its raw YAML specification, if the owner has enabled Public API access.
+      operationId: getPublicQuerySet
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The Firebase UID of the query set owner.
+          schema:
+            type: string
+          example: cabeceowei-uid-123
+        - name: querySetId
+          in: path
+          required: true
+          description: The unique identifier of the Query Set.
+          schema:
+            type: string
+          example: qs_1711892019_abc12
+      responses:
+        '200':
+          description: Successfully retrieved public Query Set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicQuerySet'
+              example:
+                id: qs_1711892019_abc12
+                name: WoW Forever Multilingual
+                rawYaml: "version: 1\ndefaults:\n  max_results: 10\nqueries:\n  - id: wow-review-ja\n    q: \"WoW Forever 感想\"\n    relevance_language: ja\n    region_code: JP\n"
+                queryCount: 18
+                createdAt: '2026-10-01T01:00:00.000Z'
+                updatedAt: '2026-10-01T02:00:00.000Z'
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Query Set not found or not marked as public.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Not Found
+                message: Query set not found or not public
+        '429':
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/public/users/{userId}/query-sets/{querySetId}/search-runs:
+    get:
+      summary: List search runs for a public Query Set
+      description: Returns lightweight execution run summaries for the specified public Query Set, ordered newest first. Does not return heavy YAML or video lists.
+      operationId: listPublicSearchRuns
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The Firebase UID of the query set owner.
+          schema:
+            type: string
+          example: cabeceowei-uid-123
+        - name: querySetId
+          in: path
+          required: true
+          description: The unique identifier of the Query Set.
+          schema:
+            type: string
+          example: qs_1711892019_abc12
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of search runs to return (1-100, default 50).
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+          example: 20
+      responses:
+        '200':
+          description: Successfully retrieved list of search runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicSearchRunSummary'
+              example:
+                items:
+                  - id: run_1711893000_xyz78
+                    querySetId: qs_1711892019_abc12
+                    querySetName: WoW Forever Multilingual
+                    status: completed
+                    queryCount: 18
+                    successfulQueries: 18
+                    failedQueries: 0
+                    totalResults: 126
+                    startedAt: '2026-10-01T02:10:00.000Z'
+                    completedAt: '2026-10-01T02:10:15.000Z'
+                    createdAt: '2026-10-01T02:10:00.000Z'
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Query Set not found or not marked as public.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/public/users/{userId}/search-runs/{runId}:
+    get:
+      summary: Get public search run details
+      description: Returns the full details of a historical search run, including individual query results and normalized video items, provided the associated Query Set is currently public.
+      operationId: getPublicSearchRunDetails
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The Firebase UID of the query set owner.
+          schema:
+            type: string
+          example: cabeceowei-uid-123
+        - name: runId
+          in: path
+          required: true
+          description: The unique identifier of the search run.
+          schema:
+            type: string
+          example: run_1711893000_xyz78
+      responses:
+        '200':
+          description: Successfully retrieved search run details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSearchRun'
+              example:
+                id: run_1711893000_xyz78
+                querySetId: qs_1711892019_abc12
+                querySetName: WoW Forever Multilingual
+                status: completed
+                queryCount: 1
+                successfulQueries: 1
+                failedQueries: 0
+                totalResults: 1
+                inputYaml: "version: 1\nqueries:\n  - id: ja-review\n    q: WoW Forever 感想\n"
+                startedAt: '2026-10-01T02:10:00.000Z'
+                completedAt: '2026-10-01T02:10:15.000Z'
+                createdAt: '2026-10-01T02:10:00.000Z'
+                queryResults:
+                  - id: ja-review
+                    sourceQueryId: ja-review
+                    query: WoW Forever 感想
+                    relevanceLanguage: ja
+                    regionCode: JP
+                    status: success
+                    resultCount: 1
+                    errorCode: null
+                    errorMessage: null
+                    startedAt: '2026-10-01T02:10:01.000Z'
+                    completedAt: '2026-10-01T02:10:03.000Z'
+                    videos:
+                      - videoId: dQw4w9WgXcQ
+                        title: WoW Forever Gameplay Review
+                        channelId: UC1234567890
+                        channelTitle: GameChannel
+                        publishedAt: '2026-09-28T14:00:00.000Z'
+                        description: An in-depth review of WoW Forever in Japanese.
+                        url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+                        thumbnailUrl: https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Search run not found, has no associated query set, or the parent query set is not public.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    PublicQuerySetSummary:
+      type: object
+      required:
+        - id
+        - name
+        - queryCount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the Query Set.
+        name:
+          type: string
+          description: Name of the Query Set.
+        queryCount:
+          type: integer
+          description: Number of queries in the YAML definition.
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO timestamp when the query set was created.
+        updatedAt:
+          type: string
+          format: date-time
+          description: ISO timestamp when the query set was last modified.
+
+    PublicQuerySet:
+      type: object
+      required:
+        - id
+        - name
+        - rawYaml
+        - queryCount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the Query Set.
+        name:
+          type: string
+          description: Name of the Query Set.
+        rawYaml:
+          type: string
+          description: Raw YAML definition string.
+        queryCount:
+          type: integer
+          description: Number of queries in the YAML definition.
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO timestamp when the query set was created.
+        updatedAt:
+          type: string
+          format: date-time
+          description: ISO timestamp when the query set was last modified.
+
+    PublicSearchRunSummary:
+      type: object
+      required:
+        - id
+        - querySetId
+        - status
+        - queryCount
+        - successfulQueries
+        - failedQueries
+        - totalResults
+        - startedAt
+        - createdAt
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the search run.
+        querySetId:
+          type: string
+          description: Identifier of the parent public Query Set.
+        querySetName:
+          type: string
+          nullable: true
+          description: Name of the parent Query Set at run time.
+        status:
+          type: string
+          enum: [running, completed, partial, failed]
+          description: Execution outcome status.
+        queryCount:
+          type: integer
+          description: Number of executed queries.
+        successfulQueries:
+          type: integer
+          description: Number of queries that completed successfully.
+        failedQueries:
+          type: integer
+          description: Number of queries that encountered errors.
+        totalResults:
+          type: integer
+          description: Total number of video items found across all queries.
+        startedAt:
+          type: string
+          format: date-time
+          description: ISO timestamp when search execution started.
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO timestamp when search execution finished.
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO timestamp of search run document creation.
+
+    PublicSearchRun:
+      type: object
+      required:
+        - id
+        - querySetId
+        - status
+        - queryCount
+        - successfulQueries
+        - failedQueries
+        - totalResults
+        - inputYaml
+        - startedAt
+        - createdAt
+        - queryResults
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the search run.
+        querySetId:
+          type: string
+          description: Identifier of the parent public Query Set.
+        querySetName:
+          type: string
+          nullable: true
+          description: Name of the parent Query Set at run time.
+        status:
+          type: string
+          enum: [running, completed, partial, failed]
+          description: Execution outcome status.
+        queryCount:
+          type: integer
+          description: Number of executed queries.
+        successfulQueries:
+          type: integer
+          description: Number of queries that completed successfully.
+        failedQueries:
+          type: integer
+          description: Number of queries that encountered errors.
+        totalResults:
+          type: integer
+          description: Total number of video items found across all queries.
+        inputYaml:
+          type: string
+          description: The input YAML executed during this search run.
+        startedAt:
+          type: string
+          format: date-time
+          description: ISO timestamp when search execution started.
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO timestamp when search execution finished.
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO timestamp of search run document creation.
+        queryResults:
+          type: array
+          description: Individual query results and videos.
+          items:
+            $ref: '#/components/schemas/QueryResult'
+
+    QueryResult:
+      type: object
+      required:
+        - id
+        - sourceQueryId
+        - query
+        - status
+        - resultCount
+        - startedAt
+        - completedAt
+        - videos
+      properties:
+        id:
+          type: string
+          description: Unique result identifier.
+        sourceQueryId:
+          type: string
+          description: ID from the YAML query definition.
+        query:
+          type: string
+          description: Executed query string.
+        relevanceLanguage:
+          type: string
+          nullable: true
+          description: ISO 639-1 language code if specified.
+        regionCode:
+          type: string
+          nullable: true
+          description: ISO 3166-1 alpha-2 country code if specified.
+        status:
+          type: string
+          enum: [success, failed]
+          description: Query outcome.
+        resultCount:
+          type: integer
+          description: Number of video results returned.
+        errorCode:
+          type: string
+          nullable: true
+          description: Error identifier if query failed.
+        errorMessage:
+          type: string
+          nullable: true
+          description: Error details if query failed.
+        startedAt:
+          type: string
+          format: date-time
+          description: ISO timestamp when this individual query began.
+        completedAt:
+          type: string
+          format: date-time
+          description: ISO timestamp when this individual query finished.
+        videos:
+          type: array
+          description: Video items returned for this query.
+          items:
+            $ref: '#/components/schemas/Video'
+
+    Video:
+      type: object
+      required:
+        - videoId
+        - title
+        - channelId
+        - channelTitle
+        - publishedAt
+        - description
+        - url
+        - thumbnailUrl
+      properties:
+        videoId:
+          type: string
+          description: YouTube video ID.
+        title:
+          type: string
+          description: Video title with decoded HTML entities.
+        channelId:
+          type: string
+          description: YouTube channel ID.
+        channelTitle:
+          type: string
+          description: YouTube channel title.
+        publishedAt:
+          type: string
+          format: date-time
+          description: Video publication timestamp.
+        description:
+          type: string
+          description: Video snippet description.
+        url:
+          type: string
+          format: uri
+          description: Direct link to watch the video on YouTube.
+        thumbnailUrl:
+          type: string
+          format: uri
+          description: Video thumbnail image URL.
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error classification code.
+        message:
+          type: string
+          description: Human-readable error description.

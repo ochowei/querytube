@@ -8,8 +8,9 @@ import { fileURLToPath } from 'url';
 import { load, dump } from 'js-yaml';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import swaggerUi from 'swagger-ui-express';
 import { FirestoreService } from './server/firestoreService.js';
+import { createPublicApiRouter } from './server/publicApi.js';
 
 dotenv.config();
 
@@ -37,7 +38,6 @@ try {
 
 const adminApp = getApps().length === 0 ? initializeApp({ projectId: firebaseProjectId }) : getApps()[0];
 const adminAuth = getAuth(adminApp);
-const db = firestoreDatabaseId ? getFirestore(adminApp, firestoreDatabaseId) : getFirestore(adminApp);
 
 const firestoreService = new FirestoreService(
   firebaseProjectId,
@@ -184,7 +184,7 @@ async function testYouTubeApiKey(apiKey: string): Promise<{ valid: boolean; erro
   }
 }
 
-// Persistence: Save encrypted integration to Firestore with REST API (user token) or Admin SDK
+// Persistence: Save encrypted integration to Firestore with REST API (user token)
 async function persistUserIntegration(
   idToken: string | undefined,
   uid: string,
@@ -198,45 +198,38 @@ async function persistUserIntegration(
     updatedAt: string;
   }
 ): Promise<void> {
-  // 1. Attempt Firestore REST API using the authenticated user's ID token
-  if (idToken) {
-    try {
-      const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/${firestoreDatabaseId || '(default)'}/documents/users/${uid}/integrations/youtube`;
-      const body = {
-        fields: {
-          encryptedApiKey: { stringValue: payload.encryptedApiKey },
-          iv: { stringValue: payload.iv },
-          authTag: { stringValue: payload.authTag },
-          keyVersion: { integerValue: String(payload.keyVersion) },
-          keySuffix: { stringValue: payload.keySuffix },
-          verifiedAt: { stringValue: payload.verifiedAt },
-          updatedAt: { stringValue: payload.updatedAt },
-        },
-      };
-
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        return;
-      }
-    } catch (e) {
-      console.warn('[Firestore REST Save] Notice:', e);
-    }
+  if (!idToken) {
+    return;
   }
 
-  // 2. Fallback to Admin SDK
   try {
-    const docRef = db.collection('users').doc(uid).collection('integrations').doc('youtube');
-    await docRef.set(payload);
-  } catch (adminErr) {
-    console.warn('[Firestore Admin Save] Notice:', adminErr);
+    const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/${firestoreDatabaseId || '(default)'}/documents/users/${uid}/integrations/youtube`;
+    const body = {
+      fields: {
+        encryptedApiKey: { stringValue: payload.encryptedApiKey },
+        iv: { stringValue: payload.iv },
+        authTag: { stringValue: payload.authTag },
+        keyVersion: { integerValue: String(payload.keyVersion) },
+        keySuffix: { stringValue: payload.keySuffix },
+        verifiedAt: { stringValue: payload.verifiedAt },
+        updatedAt: { stringValue: payload.updatedAt },
+      },
+    };
+
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      console.warn('[Firestore REST Save] Notice:', res.status, await res.text());
+    }
+  } catch (e) {
+    console.warn('[Firestore REST Save] Notice:', e);
   }
 }
 
@@ -251,7 +244,7 @@ async function getUserYouTubeApiKey(
     return cached;
   }
 
-  // 2. Try Firestore REST API with the user's ID token
+  // 2. Query Firestore REST API with the user's ID token
   if (idToken) {
     try {
       const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/${firestoreDatabaseId || '(default)'}/documents/users/${uid}/integrations/youtube`;
@@ -280,36 +273,13 @@ async function getUserYouTubeApiKey(
           userSessionKeyMap.set(uid, item);
           return item;
         }
+      } else if (res.status === 404) {
+        // Document does not exist yet (key has not been configured)
+        return null;
       }
     } catch (e) {
       console.warn('[Firestore REST Get] Notice:', e);
     }
-  }
-
-  // 3. Fallback to Admin SDK
-  try {
-    const docRef = db.collection('users').doc(uid).collection('integrations').doc('youtube');
-    const snap = await docRef.get();
-    if (snap.exists) {
-      const data = snap.data();
-      if (data?.encryptedApiKey && data?.iv && data?.authTag) {
-        const decryptedKey = decryptSecret({
-          encryptedApiKey: data.encryptedApiKey,
-          iv: data.iv,
-          authTag: data.authTag,
-          keyVersion: data.keyVersion,
-        });
-        const item = {
-          apiKey: decryptedKey,
-          suffix: data.keySuffix || decryptedKey.slice(-4),
-          verifiedAt: data.verifiedAt,
-        };
-        userSessionKeyMap.set(uid, item);
-        return item;
-      }
-    }
-  } catch (adminErr) {
-    console.warn('[Firestore Admin Get] Notice:', adminErr);
   }
 
   return null;
@@ -326,16 +296,9 @@ async function removeUserIntegration(idToken: string | undefined, uid: string): 
         method: 'DELETE',
         headers: { Authorization: `Bearer ${idToken}` },
       });
-    } catch {
-      // ignore
+    } catch (e) {
+      console.warn('[Firestore REST Delete] Notice:', e);
     }
-  }
-
-  try {
-    const docRef = db.collection('users').doc(uid).collection('integrations').doc('youtube');
-    await docRef.delete();
-  } catch {
-    // ignore
   }
 }
 
@@ -343,6 +306,35 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
+
+// Load and parse OpenAPI documentation
+const openapiYamlPath = path.join(__dirname, 'openapi', 'public-api.yaml');
+let openapiDocument: any = null;
+try {
+  if (fs.existsSync(openapiYamlPath)) {
+    openapiDocument = load(fs.readFileSync(openapiYamlPath, 'utf-8'));
+  }
+} catch (err) {
+  console.warn('Failed to parse openapi/public-api.yaml:', err);
+}
+
+// Machine-readable OpenAPI 3.1 JSON endpoint (Public)
+app.get('/openapi.json', (_req: Request, res: Response) => {
+  if (!openapiDocument) {
+    res.status(500).json({ error: 'OpenAPI specification not available' });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/json');
+  res.json(openapiDocument);
+});
+
+// Swagger UI Documentation (Public)
+if (openapiDocument) {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiDocument));
+}
+
+// Mount Public Read-Only API
+app.use('/api/public', createPublicApiRouter(firestoreService));
 
 interface QueryConfig {
   id: string;
@@ -778,7 +770,7 @@ app.get('/api/query-sets/:id', requireAuth, async (req: Request, res: Response) 
 // POST /api/query-sets - Create new query set
 app.post('/api/query-sets', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { name, rawYaml, queryCount } = req.body || {};
+    const { name, rawYaml, queryCount, publicApiEnabled } = req.body || {};
     if (typeof rawYaml !== 'string') {
       return res.status(400).json({ error: 'Missing rawYaml in request body' });
     }
@@ -787,7 +779,8 @@ app.post('/api/query-sets', requireAuth, async (req: Request, res: Response) => 
       req.user!.uid,
       name || 'Untitled Query Set',
       rawYaml,
-      Number(queryCount || 0)
+      Number(queryCount || 0),
+      Boolean(publicApiEnabled)
     );
     res.json(created);
   } catch (err: any) {
@@ -798,15 +791,32 @@ app.post('/api/query-sets', requireAuth, async (req: Request, res: Response) => 
 // PUT /api/query-sets/:id - Update existing query set
 app.put('/api/query-sets/:id', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { name, rawYaml, queryCount } = req.body || {};
+    const { name, rawYaml, queryCount, publicApiEnabled } = req.body || {};
     const updated = await firestoreService.updateQuerySet(req.idToken!, req.user!.uid, req.params.id, {
       name,
       rawYaml,
       queryCount: queryCount !== undefined ? Number(queryCount) : undefined,
+      publicApiEnabled: publicApiEnabled !== undefined ? Boolean(publicApiEnabled) : undefined,
     });
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to update query set' });
+  }
+});
+
+// PATCH /api/query-sets/:id/public-api - Toggle public API status
+app.patch('/api/query-sets/:id/public-api', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { publicApiEnabled } = req.body || {};
+    if (typeof publicApiEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'publicApiEnabled boolean is required' });
+    }
+    const updated = await firestoreService.updateQuerySet(req.idToken!, req.user!.uid, req.params.id, {
+      publicApiEnabled: Boolean(publicApiEnabled),
+    });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to update public API status' });
   }
 });
 

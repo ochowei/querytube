@@ -1,5 +1,15 @@
 import { dump } from 'js-yaml';
-import { QuerySet, SearchRun, SearchRunDetails, QueryResultItem, StoredVideoItem } from '../src/types/index.js';
+import {
+  QuerySet,
+  SearchRun,
+  SearchRunDetails,
+  QueryResultItem,
+  StoredVideoItem,
+  PublicQuerySetSummary,
+  PublicQuerySet,
+  PublicSearchRunSummary,
+  PublicSearchRun,
+} from '../src/types/index.js';
 
 interface FirestoreFieldString {
   stringValue: string;
@@ -107,6 +117,7 @@ export class FirestoreService {
             name: raw.name || 'Untitled Query Set',
             rawYaml: raw.rawYaml || '',
             queryCount: Number(raw.queryCount || 0),
+            publicApiEnabled: Boolean(raw.publicApiEnabled),
             createdAt: raw.createdAt || doc.createTime,
             updatedAt: raw.updatedAt || doc.updateTime,
           };
@@ -144,6 +155,7 @@ export class FirestoreService {
           name: raw.name || 'Untitled Query Set',
           rawYaml: raw.rawYaml || '',
           queryCount: Number(raw.queryCount || 0),
+          publicApiEnabled: Boolean(raw.publicApiEnabled),
           createdAt: raw.createdAt || doc.createTime,
           updatedAt: raw.updatedAt || doc.updateTime,
         };
@@ -162,7 +174,8 @@ export class FirestoreService {
     uid: string,
     name: string,
     rawYaml: string,
-    queryCount: number
+    queryCount: number,
+    publicApiEnabled = false
   ): Promise<QuerySet> {
     const now = new Date().toISOString();
     const querySetId = `qs_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -171,6 +184,7 @@ export class FirestoreService {
       name: name.trim() || 'Untitled Query Set',
       rawYaml,
       queryCount,
+      publicApiEnabled: Boolean(publicApiEnabled),
       createdAt: now,
       updatedAt: now,
     };
@@ -193,6 +207,7 @@ export class FirestoreService {
             name: payload.name,
             rawYaml: payload.rawYaml,
             queryCount: payload.queryCount,
+            publicApiEnabled: payload.publicApiEnabled,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
           }),
@@ -209,7 +224,7 @@ export class FirestoreService {
     idToken: string,
     uid: string,
     querySetId: string,
-    updates: { name?: string; rawYaml?: string; queryCount?: number }
+    updates: { name?: string; rawYaml?: string; queryCount?: number; publicApiEnabled?: boolean }
   ): Promise<QuerySet> {
     const existing = await this.getQuerySet(idToken, uid, querySetId);
     const now = new Date().toISOString();
@@ -218,6 +233,9 @@ export class FirestoreService {
       name: updates.name ?? existing?.name ?? 'Untitled Query Set',
       rawYaml: updates.rawYaml ?? existing?.rawYaml ?? '',
       queryCount: updates.queryCount ?? existing?.queryCount ?? 0,
+      publicApiEnabled: updates.publicApiEnabled !== undefined
+        ? Boolean(updates.publicApiEnabled)
+        : (existing?.publicApiEnabled ?? false),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
@@ -238,6 +256,7 @@ export class FirestoreService {
             name: updated.name,
             rawYaml: updated.rawYaml,
             queryCount: updated.queryCount,
+            publicApiEnabled: updated.publicApiEnabled,
             createdAt: updated.createdAt,
             updatedAt: updated.updatedAt,
           }),
@@ -248,6 +267,129 @@ export class FirestoreService {
     }
 
     return updated;
+  }
+
+  // --- PUBLIC READ METHODS (Server-Side, No ID Token Required) ---
+
+  getPublicQuerySets(uid: string): PublicQuerySetSummary[] {
+    const userMemory = inMemoryQuerySets.get(uid);
+    if (!userMemory) return [];
+
+    const publicItems = Array.from(userMemory.values()).filter((qs) => qs.publicApiEnabled === true);
+    return publicItems
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .map((qs) => ({
+        id: qs.id,
+        name: qs.name,
+        queryCount: qs.queryCount,
+        createdAt: qs.createdAt,
+        updatedAt: qs.updatedAt,
+      }));
+  }
+
+  getPublicQuerySet(uid: string, querySetId: string): PublicQuerySet | null {
+    const userMemory = inMemoryQuerySets.get(uid);
+    if (!userMemory) return null;
+
+    const qs = userMemory.get(querySetId);
+    if (!qs || qs.publicApiEnabled !== true) {
+      return null;
+    }
+
+    return {
+      id: qs.id,
+      name: qs.name,
+      rawYaml: qs.rawYaml,
+      queryCount: qs.queryCount,
+      createdAt: qs.createdAt,
+      updatedAt: qs.updatedAt,
+    };
+  }
+
+  getPublicSearchRuns(uid: string, querySetId: string, limitCount = 50): PublicSearchRunSummary[] | null {
+    // 1. First ensure the QuerySet exists and is public
+    const qs = this.getPublicQuerySet(uid, querySetId);
+    if (!qs) {
+      return null;
+    }
+
+    // 2. Fetch runs associated with this QuerySet
+    const userRuns = inMemorySearchRuns.get(uid);
+    if (!userRuns) {
+      return [];
+    }
+
+    const matchedRuns = Array.from(userRuns.values()).filter((run) => run.querySetId === querySetId);
+    const sorted = matchedRuns.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    const cappedLimit = Math.max(1, Math.min(100, limitCount));
+
+    return sorted.slice(0, cappedLimit).map((r) => ({
+      id: r.id,
+      querySetId: r.querySetId || querySetId,
+      querySetName: r.querySetName ?? null,
+      status: r.status,
+      queryCount: r.queryCount,
+      successfulQueries: r.successfulQueries,
+      failedQueries: r.failedQueries,
+      totalResults: r.totalResults,
+      startedAt: r.startedAt,
+      completedAt: r.completedAt ?? null,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  getPublicSearchRunDetails(uid: string, runId: string): PublicSearchRun | null {
+    // 1. Find SearchRun details
+    const userDetails = inMemoryRunDetails.get(uid);
+    const details = userDetails ? userDetails.get(runId) : null;
+    if (!details || !details.querySetId) {
+      return null;
+    }
+
+    // 2. Verify corresponding QuerySet belongs to same user and is public
+    const qs = this.getPublicQuerySet(uid, details.querySetId);
+    if (!qs) {
+      return null;
+    }
+
+    // 3. Construct safe public search run DTO
+    return {
+      id: details.id,
+      querySetId: details.querySetId,
+      querySetName: details.querySetName ?? null,
+      status: details.status,
+      queryCount: details.queryCount,
+      successfulQueries: details.successfulQueries,
+      failedQueries: details.failedQueries,
+      totalResults: details.totalResults,
+      inputYaml: details.inputYaml,
+      startedAt: details.startedAt,
+      completedAt: details.completedAt ?? null,
+      createdAt: details.createdAt,
+      queryResults: (details.queryResults || []).map((q) => ({
+        id: q.id,
+        sourceQueryId: q.sourceQueryId,
+        query: q.query,
+        relevanceLanguage: q.relevanceLanguage ?? null,
+        regionCode: q.regionCode ?? null,
+        status: q.status,
+        resultCount: q.resultCount,
+        errorCode: q.errorCode ?? null,
+        errorMessage: q.errorMessage ?? null,
+        startedAt: q.startedAt,
+        completedAt: q.completedAt,
+        videos: (q.videos || []).map((v) => ({
+          videoId: v.videoId,
+          title: v.title,
+          channelId: v.channelId,
+          channelTitle: v.channelTitle,
+          publishedAt: v.publishedAt,
+          description: v.description,
+          url: v.url,
+          thumbnailUrl: v.thumbnailUrl,
+        })),
+      })),
+    };
   }
 
   async deleteQuerySet(idToken: string, uid: string, querySetId: string): Promise<void> {

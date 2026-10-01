@@ -14,6 +14,10 @@ import {
   Check,
   X,
   FileCode,
+  Globe,
+  Copy,
+  ExternalLink,
+  BookOpen,
 } from 'lucide-react';
 
 interface QueriesViewProps {
@@ -23,6 +27,9 @@ interface QueriesViewProps {
   onCreateNew: () => void;
   onRenameQuerySet: (id: string, newName: string) => Promise<void>;
   onDeleteQuerySet: (id: string) => Promise<void>;
+  onTogglePublicApi?: (id: string, enabled: boolean) => Promise<void>;
+  onNavigateToDocs?: () => void;
+  currentUserId?: string | null;
 }
 
 export const QueriesView: React.FC<QueriesViewProps> = ({
@@ -32,6 +39,9 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
   onCreateNew,
   onRenameQuerySet,
   onDeleteQuerySet,
+  onTogglePublicApi,
+  onNavigateToDocs,
+  currentUserId,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -39,6 +49,9 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingRename, setIsSavingRename] = useState(false);
+  const [togglingPublicId, setTogglingPublicId] = useState<string | null>(null);
+  const [publicToggleError, setPublicToggleError] = useState<{ id: string; error: string } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const filteredSets = querySets.filter((qs) =>
     qs.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -67,6 +80,19 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
       setDeleteConfirmId(null);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleTogglePublic = async (id: string, nextState: boolean) => {
+    if (!onTogglePublicApi) return;
+    setTogglingPublicId(id);
+    setPublicToggleError(null);
+    try {
+      await onTogglePublicApi(id, nextState);
+    } catch (err: any) {
+      setPublicToggleError({ id, error: err.message || 'Failed to update Public API setting' });
+    } finally {
+      setTogglingPublicId(null);
     }
   };
 
@@ -224,6 +250,108 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
                       <Clock className="w-3 h-3" />
                       Updated {formatDate(qs.updatedAt)}
                     </span>
+                  </div>
+
+                  {/* Public API Toggle Box */}
+                  <div className="mt-3 pt-3 border-t border-zinc-800/70 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-0.5 pr-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-zinc-200">Public API</span>
+                          {qs.publicApiEnabled ? (
+                            <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Enabled
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-zinc-800 text-zinc-400 border border-zinc-700/50">
+                              Disabled
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-snug">
+                          Allow this Query Set and its search runs to be accessed through the public read-only API.
+                        </p>
+                      </div>
+
+                      {/* Toggle Switch Button */}
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(qs.publicApiEnabled)}
+                        disabled={togglingPublicId === qs.id}
+                        onClick={() => handleTogglePublic(qs.id, !qs.publicApiEnabled)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-1 focus:ring-red-500 disabled:opacity-50 mt-0.5 ${
+                          qs.publicApiEnabled ? 'bg-emerald-600' : 'bg-zinc-700'
+                        }`}
+                        title={qs.publicApiEnabled ? 'Disable Public API' : 'Enable Public API'}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            qs.publicApiEnabled ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Loading feedback */}
+                    {togglingPublicId === qs.id && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-mono">
+                        <Loader2 className="w-3 h-3 animate-spin text-red-500" />
+                        <span>Updating Public API setting...</span>
+                      </div>
+                    )}
+
+                    {/* Error message */}
+                    {publicToggleError?.id === qs.id && (
+                      <p className="text-[11px] text-red-400 font-medium">
+                        {publicToggleError.error}
+                      </p>
+                    )}
+
+                    {/* Public Endpoint Helper when enabled */}
+                    {qs.publicApiEnabled && currentUserId && (
+                      <div className="p-1.5 rounded bg-zinc-950/80 border border-zinc-800 flex items-center justify-between gap-1 text-[10px] font-mono text-zinc-400">
+                        <span className="truncate" title={`/api/public/users/${currentUserId}/query-sets/${qs.id}`}>
+                          /api/public/users/{currentUserId.slice(0, 8)}.../query-sets/{qs.id}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const url = `${window.location.origin}/api/public/users/${currentUserId}/query-sets/${qs.id}`;
+                              navigator.clipboard.writeText(url);
+                              setCopiedId(qs.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] cursor-pointer"
+                            title="Copy full public API URL"
+                          >
+                            {copiedId === qs.id ? 'Copied' : 'Copy URL'}
+                          </button>
+                          {onNavigateToDocs && (
+                            <button
+                              type="button"
+                              onClick={onNavigateToDocs}
+                              className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[10px] cursor-pointer flex items-center gap-1"
+                              title="Open Swagger API Docs in SPA"
+                            >
+                              <BookOpen className="w-2.5 h-2.5 text-red-500" />
+                              <span>Docs</span>
+                            </button>
+                          )}
+                          <a
+                            href={`/api/public/users/${currentUserId}/query-sets/${qs.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                            title="Open public endpoint in browser"
+                          >
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

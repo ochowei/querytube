@@ -12,6 +12,7 @@ import { LoginPage } from './components/LoginPage';
 import { ApiKeySettings, UserApiKeyStatus } from './components/ApiKeySettings';
 import { QueriesView } from './components/QueriesView';
 import { HistoryView } from './components/HistoryView';
+import { ApiDocsView } from './components/ApiDocsView';
 import { SaveQuerySetModal } from './components/SaveQuerySetModal';
 import { useAuth } from './context/AuthContext';
 import { validateYamlString, SAMPLE_YAMLS, ValidationResult } from './utils/yamlValidator';
@@ -19,7 +20,7 @@ import { QuerySet, SearchRun, SearchRunDetails } from './types';
 import { AlertCircle, X, Terminal, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function App() {
-  const { authState, getIdToken, setAuthError } = useAuth();
+  const { user, authState, getIdToken, setAuthError } = useAuth();
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<AppTab>('search');
@@ -372,6 +373,37 @@ export default function App() {
     }
   };
 
+  const handleTogglePublicApi = async (id: string, enabled: boolean) => {
+    const token = await getIdToken();
+    if (!token) throw new Error('Session expired. Please sign in again.');
+
+    const res = await fetch(`/api/query-sets/${id}/public-api`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ publicApiEnabled: enabled }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update Public API setting.');
+    }
+
+    const updated: QuerySet = await res.json();
+    setQuerySets((prev) => prev.map((qs) => (qs.id === id ? updated : qs)));
+    if (activeQuerySet?.id === id) {
+      setActiveQuerySet(updated);
+    }
+    setSuccessNotice(
+      enabled
+        ? `Public API enabled for "${updated.name}"`
+        : `Public API disabled for "${updated.name}"`
+    );
+    setTimeout(() => setSuccessNotice(null), 3000);
+  };
+
   // --- Search Runs Handlers ---
 
   const handleLoadRunDetails = async (runId: string): Promise<SearchRunDetails | null> => {
@@ -428,6 +460,7 @@ export default function App() {
           name: querySetName || 'Historical Query Set',
           rawYaml: inputYaml,
           queryCount: validation.queryCount,
+          publicApiEnabled: false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
@@ -869,6 +902,9 @@ export default function App() {
             }}
             onRenameQuerySet={handleRenameQuerySet}
             onDeleteQuerySet={handleDeleteQuerySet}
+            onTogglePublicApi={handleTogglePublicApi}
+            onNavigateToDocs={() => setActiveTab('docs')}
+            currentUserId={user?.uid}
           />
         )}
 
@@ -882,6 +918,11 @@ export default function App() {
             onRunAgain={handleRunAgain}
             onDeleteRun={handleDeleteRun}
           />
+        )}
+
+        {/* Tab 4: API Docs View */}
+        {activeTab === 'docs' && (
+          <ApiDocsView />
         )}
       </main>
 

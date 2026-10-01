@@ -3,8 +3,57 @@ export interface QuerySet {
   name: string;
   rawYaml: string;
   queryCount: number;
+  publicApiEnabled: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// Public API DTOs
+export interface PublicQuerySetSummary {
+  id: string;
+  name: string;
+  queryCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicQuerySet {
+  id: string;
+  name: string;
+  rawYaml: string;
+  queryCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicSearchRunSummary {
+  id: string;
+  querySetId: string;
+  querySetName: string | null;
+  status: SearchRunStatus;
+  queryCount: number;
+  successfulQueries: number;
+  failedQueries: number;
+  totalResults: number;
+  startedAt: string;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface PublicSearchRun {
+  id: string;
+  querySetId: string;
+  querySetName: string | null;
+  status: SearchRunStatus;
+  queryCount: number;
+  successfulQueries: number;
+  failedQueries: number;
+  totalResults: number;
+  inputYaml: string;
+  startedAt: string;
+  completedAt: string | null;
+  createdAt: string;
+  queryResults: QueryResultItem[];
 }
 
 export type SearchRunStatus = 'running' | 'completed' | 'partial' | 'failed';

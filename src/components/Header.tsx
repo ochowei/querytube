@@ -10,11 +10,12 @@ import {
   AlertTriangle,
   LogOut,
   User as UserIcon,
+  BookOpen,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserApiKeyStatus } from './ApiKeySettings';
 
-export type AppTab = 'search' | 'queries' | 'history';
+export type AppTab = 'search' | 'queries' | 'history' | 'docs';
 
 interface HeaderProps {
   activeTab: AppTab;
@@ -121,6 +122,19 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Settings className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Settings</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTabChange('docs')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                activeTab === 'docs'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-xs'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-red-500" />
+              <span>API Docs</span>
             </button>
           </nav>
         </div>
