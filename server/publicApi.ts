@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { FirestoreService } from './firestoreService.js';
+import { FirestoreReadError, FirestoreService } from './firestoreService.js';
 
 // Simple in-memory sliding window rate limiter (100 req/min per IP)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -49,8 +49,9 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
     try {
       const items = await firestoreService.getPublicQuerySets(userId);
       res.json({ items });
-    } catch (err: any) {
-      res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve query sets' });
+    } catch (err: unknown) {
+      const status = err instanceof FirestoreReadError ? err.statusCode : 503;
+      res.status(status).json({ error: 'Service Unavailable', message: 'Failed to retrieve query sets' });
     }
   });
 
@@ -73,8 +74,9 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
       }
 
       res.json(querySet);
-    } catch (err: any) {
-      res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve query set' });
+    } catch (err: unknown) {
+      const status = err instanceof FirestoreReadError ? err.statusCode : 503;
+      res.status(status).json({ error: 'Service Unavailable', message: 'Failed to retrieve query set' });
     }
   });
 
@@ -99,8 +101,9 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
     try {
       const runs = await firestoreService.getPublicSearchRuns(userId, querySetId, limit);
       res.json({ items: runs });
-    } catch (err: any) {
-      res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve search runs' });
+    } catch (err: unknown) {
+      const status = err instanceof FirestoreReadError ? err.statusCode : 503;
+      res.status(status).json({ error: 'Service Unavailable', message: 'Failed to retrieve search runs' });
     }
   });
 
@@ -124,8 +127,9 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
       }
 
       res.json(runDetails);
-    } catch (err: any) {
-      res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve search run details' });
+    } catch (err: unknown) {
+      const status = err instanceof FirestoreReadError ? err.statusCode : 503;
+      res.status(status).json({ error: 'Service Unavailable', message: 'Failed to retrieve search run details' });
     }
   });
 
@@ -146,8 +150,9 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
     try {
       const runs = await firestoreService.getPublicSearchRuns(userId, querySetId, limit);
       res.json({ items: runs });
-    } catch (err: any) {
-      res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve search runs' });
+    } catch (err: unknown) {
+      const status = err instanceof FirestoreReadError ? err.statusCode : 503;
+      res.status(status).json({ error: 'Service Unavailable', message: 'Failed to retrieve search runs' });
     }
   });
 

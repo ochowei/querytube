@@ -85,6 +85,31 @@ function getOrCreateUserMap<T>(store: Map<string, Map<string, T>>, uid: string):
   return userMap;
 }
 
+export class FirestoreReadError extends Error {
+  readonly statusCode = 503;
+
+  constructor(readonly resource: 'QuerySets' | 'SearchRuns') {
+    super(`Firestore ${resource} read failed.`);
+    this.name = 'FirestoreReadError';
+  }
+}
+
+export class FirestoreWriteError extends Error {
+  readonly statusCode = 503;
+
+  constructor(readonly resource: 'QuerySets' | 'SearchRuns') {
+    super(`Firestore ${resource} write failed.`);
+    this.name = 'FirestoreWriteError';
+  }
+}
+
+function firestoreFailureStatus(error: unknown): string {
+  if (typeof error !== 'object' || error === null) return 'network';
+  if ('status' in error && typeof error.status === 'number') return String(error.status);
+  if ('code' in error && typeof error.code === 'string') return error.code;
+  return 'network';
+}
+
 export class FirestoreService {
   constructor(
     private projectId: string,
@@ -100,22 +125,52 @@ export class FirestoreService {
 
   async listQuerySets(idToken: string, uid: string): Promise<QuerySet[]> {
     const userMemory = getOrCreateUserMap(inMemoryQuerySets, uid);
+    console.info(`[QuerySets] Loading for uid=${uid.slice(0, 6)}`);
 
     try {
-      const url = `${this.baseUrl}/users/${uid}/querySets?pageSize=100`;
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      let items: QuerySet[];
 
-      if (res.ok) {
-        const data = (await res.json()) as any;
-        const docs = Array.isArray(data.documents) ? data.documents : [];
+      if (this.adminDb) {
+        const snapshot = await this.adminDb
+          .collection('users')
+          .doc(uid)
+          .collection('querySets')
+          .get();
 
-        for (const doc of docs) {
+        items = snapshot.docs.map((doc) => {
+          const raw = doc.data();
+          return {
+            id: doc.id,
+            name: raw.name || 'Untitled Query Set',
+            rawYaml: raw.rawYaml || '',
+            queryCount: Number(raw.queryCount || 0),
+            publicApiEnabled: Boolean(raw.publicApiEnabled),
+            createdAt: raw.createdAt || doc.createTime.toDate().toISOString(),
+            updatedAt: raw.updatedAt || doc.updateTime.toDate().toISOString(),
+          };
+        });
+      } else {
+        const docs: any[] = [];
+        let pageToken: string | undefined;
+        do {
+          const url = new URL(`${this.baseUrl}/users/${uid}/querySets`);
+          url.searchParams.set('pageSize', '100');
+          if (pageToken) url.searchParams.set('pageToken', pageToken);
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+
+          if (!res.ok) throw Object.assign(new Error('Firestore request failed'), { status: res.status });
+          const data = (await res.json()) as any;
+          if (Array.isArray(data.documents)) docs.push(...data.documents);
+          pageToken = typeof data.nextPageToken === 'string' ? data.nextPageToken : undefined;
+        } while (pageToken);
+
+        items = docs.map((doc) => {
           const id = doc.name.split('/').pop() || '';
           const raw = fromFirestoreFields(doc.fields);
-          const item: QuerySet = {
+          return {
             id,
             name: raw.name || 'Untitled Query Set',
             rawYaml: raw.rawYaml || '',
@@ -124,17 +179,18 @@ export class FirestoreService {
             createdAt: raw.createdAt || doc.createTime,
             updatedAt: raw.updatedAt || doc.updateTime,
           };
-          userMemory.set(id, item);
-        }
-      } else if (res.status !== 404) {
-        console.warn('[Firestore] listQuerySets notice (using cache):', res.status);
+        });
       }
-    } catch (e) {
-      console.warn('[Firestore] listQuerySets network notice:', e);
-    }
 
-    const items = Array.from(userMemory.values());
-    return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      userMemory.clear();
+      for (const item of items) userMemory.set(item.id, item);
+      console.info(`[QuerySets] Firestore read succeeded, count=${items.length}`);
+      return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    } catch (error) {
+      const status = firestoreFailureStatus(error);
+      console.warn(`[QuerySets] Firestore read failed, status=${status}`);
+      throw new FirestoreReadError('QuerySets');
+    }
   }
 
   async getQuerySet(idToken: string, uid: string, querySetId: string): Promise<QuerySet | null> {
@@ -192,14 +248,10 @@ export class FirestoreService {
       updatedAt: now,
     };
 
-    // Save to memory immediately
-    const userMemory = getOrCreateUserMap(inMemoryQuerySets, uid);
-    userMemory.set(querySetId, payload);
-
     // Persist to Firestore
     try {
       const url = `${this.baseUrl}/users/${uid}/querySets?documentId=${querySetId}`;
-      await fetch(url, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -216,11 +268,15 @@ export class FirestoreService {
           }),
         }),
       });
-    } catch (e) {
-      console.warn('[Firestore] createQuerySet persist notice:', e);
-    }
+      if (!res.ok) throw Object.assign(new Error('Firestore request failed'), { status: res.status });
 
-    return payload;
+      const userMemory = getOrCreateUserMap(inMemoryQuerySets, uid);
+      userMemory.set(querySetId, payload);
+      return payload;
+    } catch (error) {
+      console.warn(`[QuerySets] Firestore write failed, status=${firestoreFailureStatus(error)}`);
+      throw new FirestoreWriteError('QuerySets');
+    }
   }
 
   async updateQuerySet(
@@ -243,12 +299,9 @@ export class FirestoreService {
       updatedAt: now,
     };
 
-    const userMemory = getOrCreateUserMap(inMemoryQuerySets, uid);
-    userMemory.set(querySetId, updated);
-
     try {
       const url = `${this.baseUrl}/users/${uid}/querySets/${encodeURIComponent(querySetId)}`;
-      await fetch(url, {
+      const res = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -265,17 +318,21 @@ export class FirestoreService {
           }),
         }),
       });
-    } catch (e) {
-      console.warn('[Firestore] updateQuerySet persist notice:', e);
-    }
+      if (!res.ok) throw Object.assign(new Error('Firestore request failed'), { status: res.status });
 
-    return updated;
+      const userMemory = getOrCreateUserMap(inMemoryQuerySets, uid);
+      userMemory.set(querySetId, updated);
+      return updated;
+    } catch (error) {
+      console.warn(`[QuerySets] Firestore write failed, status=${firestoreFailureStatus(error)}`);
+      throw new FirestoreWriteError('QuerySets');
+    }
   }
 
   // --- REUSABLE FIRESTORE SEARCH RUN DETAILS LOADER ---
 
   async loadSearchRunDetailsFromFirestore(uid: string, runId: string): Promise<SearchRunDetails | null> {
-    if (!this.adminDb) return null;
+    if (!this.adminDb) throw new FirestoreReadError('SearchRuns');
 
     try {
       const runDocRef = this.adminDb.collection('users').doc(uid).collection('searchRuns').doc(runId);
@@ -385,9 +442,9 @@ export class FirestoreService {
         queryResults,
         outputYaml,
       };
-    } catch (e: any) {
-      console.warn(`[Firestore Admin] loadSearchRunDetailsFromFirestore error (${runId}):`, e.message);
-      return null;
+    } catch (error) {
+      console.warn(`[SearchRuns] Firestore detail read failed, status=${firestoreFailureStatus(error)}`);
+      throw new FirestoreReadError('SearchRuns');
     }
   }
 
@@ -395,36 +452,33 @@ export class FirestoreService {
 
   async getPublicQuerySets(uid: string): Promise<PublicQuerySetSummary[]> {
     const userMemory = getOrCreateUserMap(inMemoryQuerySets, uid);
+    if (!this.adminDb) throw new FirestoreReadError('QuerySets');
 
-    // 1. Authoritative fetch from Firestore via Firebase Admin SDK
-    if (this.adminDb) {
-      try {
-        const snap = await this.adminDb
-          .collection('users')
-          .doc(uid)
-          .collection('querySets')
-          .get();
-
-        for (const doc of snap.docs) {
-          const raw = doc.data();
-          const item: QuerySet = {
-            id: doc.id,
-            name: raw.name || 'Untitled Query Set',
-            rawYaml: raw.rawYaml || '',
-            queryCount: Number(raw.queryCount || 0),
-            publicApiEnabled: Boolean(raw.publicApiEnabled),
-            createdAt: raw.createdAt || (doc.createTime ? doc.createTime.toDate().toISOString() : new Date().toISOString()),
-            updatedAt: raw.updatedAt || (doc.updateTime ? doc.updateTime.toDate().toISOString() : new Date().toISOString()),
-          };
-          userMemory.set(doc.id, item);
-        }
-      } catch (e: any) {
-        console.warn('[Firestore Admin] getPublicQuerySets notice:', e.message);
-      }
+    let snapshot;
+    try {
+      snapshot = await this.adminDb.collection('users').doc(uid).collection('querySets').get();
+    } catch (error) {
+      console.warn(`[QuerySets] Firestore public read failed, status=${firestoreFailureStatus(error)}`);
+      throw new FirestoreReadError('QuerySets');
     }
 
-    // 2. Filter strictly by publicApiEnabled === true
-    const publicItems = Array.from(userMemory.values()).filter((qs) => qs.publicApiEnabled === true);
+    const items = snapshot.docs.map((doc) => {
+      const raw = doc.data();
+      return {
+        id: doc.id,
+        name: raw.name || 'Untitled Query Set',
+        rawYaml: raw.rawYaml || '',
+        queryCount: Number(raw.queryCount || 0),
+        publicApiEnabled: Boolean(raw.publicApiEnabled),
+        createdAt: raw.createdAt || doc.createTime.toDate().toISOString(),
+        updatedAt: raw.updatedAt || doc.updateTime.toDate().toISOString(),
+      } satisfies QuerySet;
+    });
+    userMemory.clear();
+    for (const item of items) userMemory.set(item.id, item);
+
+    // Filter strictly by publicApiEnabled === true using this Firestore snapshot.
+    const publicItems = items.filter((qs) => qs.publicApiEnabled === true);
     return publicItems
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .map((qs) => ({
@@ -438,38 +492,32 @@ export class FirestoreService {
 
   async getPublicQuerySet(uid: string, querySetId: string): Promise<PublicQuerySet | null> {
     const userMemory = getOrCreateUserMap(inMemoryQuerySets, uid);
+    if (!this.adminDb) throw new FirestoreReadError('QuerySets');
 
-    // 1. Authoritative fetch from Firestore via Firebase Admin SDK
-    if (this.adminDb) {
-      try {
-        const docSnap = await this.adminDb
-          .collection('users')
-          .doc(uid)
-          .collection('querySets')
-          .doc(querySetId)
-          .get();
-
-        if (docSnap.exists) {
-          const raw = docSnap.data()!;
-          const item: QuerySet = {
-            id: querySetId,
-            name: raw.name || 'Untitled Query Set',
-            rawYaml: raw.rawYaml || '',
-            queryCount: Number(raw.queryCount || 0),
-            publicApiEnabled: Boolean(raw.publicApiEnabled),
-            createdAt: raw.createdAt || (docSnap.createTime ? docSnap.createTime.toDate().toISOString() : new Date().toISOString()),
-            updatedAt: raw.updatedAt || (docSnap.updateTime ? docSnap.updateTime.toDate().toISOString() : new Date().toISOString()),
-          };
-          userMemory.set(querySetId, item);
-        } else {
-          userMemory.delete(querySetId);
-        }
-      } catch (e: any) {
-        console.warn('[Firestore Admin] getPublicQuerySet notice:', e.message);
-      }
+    let docSnap;
+    try {
+      docSnap = await this.adminDb.collection('users').doc(uid).collection('querySets').doc(querySetId).get();
+    } catch (error) {
+      console.warn(`[QuerySets] Firestore public read failed, status=${firestoreFailureStatus(error)}`);
+      throw new FirestoreReadError('QuerySets');
     }
 
-    const qs = userMemory.get(querySetId);
+    if (!docSnap.exists) {
+      userMemory.delete(querySetId);
+      return null;
+    }
+
+    const raw = docSnap.data()!;
+    const qs: QuerySet = {
+      id: querySetId,
+      name: raw.name || 'Untitled Query Set',
+      rawYaml: raw.rawYaml || '',
+      queryCount: Number(raw.queryCount || 0),
+      publicApiEnabled: Boolean(raw.publicApiEnabled),
+      createdAt: raw.createdAt || docSnap.createTime?.toDate().toISOString() || new Date().toISOString(),
+      updatedAt: raw.updatedAt || docSnap.updateTime?.toDate().toISOString() || new Date().toISOString(),
+    };
+    userMemory.set(querySetId, qs);
     if (!qs || qs.publicApiEnabled !== true) {
       return null;
     }
@@ -486,44 +534,41 @@ export class FirestoreService {
 
   async getPublicSearchRuns(uid: string, querySetId?: string | null, limitCount = 50): Promise<PublicSearchRunSummary[]> {
     const userRuns = getOrCreateUserMap(inMemorySearchRuns, uid);
+    if (!this.adminDb) throw new FirestoreReadError('SearchRuns');
 
-    // 1. Fetch runs from Firestore via Firebase Admin SDK
-    if (this.adminDb) {
-      try {
-        const runsSnap = await this.adminDb
-          .collection('users')
-          .doc(uid)
-          .collection('searchRuns')
-          .get();
-
-        for (const doc of runsSnap.docs) {
-          const raw = doc.data();
-          const visibility: ResourceVisibility = raw.visibility === 'public' ? 'public' : 'private';
-          const item: SearchRun = {
-            id: doc.id,
-            querySetId: raw.querySetId || null,
-            querySetName: raw.querySetName || null,
-            status: raw.status || 'completed',
-            queryCount: Number(raw.queryCount || 0),
-            successfulQueries: Number(raw.successfulQueries || 0),
-            failedQueries: Number(raw.failedQueries || 0),
-            totalResults: Number(raw.totalResults || 0),
-            inputYaml: raw.inputYaml || '',
-            startedAt: raw.startedAt || (doc.createTime ? doc.createTime.toDate().toISOString() : new Date().toISOString()),
-            completedAt: raw.completedAt || null,
-            createdAt: raw.createdAt || (doc.createTime ? doc.createTime.toDate().toISOString() : new Date().toISOString()),
-            visibility,
-          };
-          userRuns.set(doc.id, item);
-        }
-      } catch (e: any) {
-        console.warn('[Firestore Admin] getPublicSearchRuns notice:', e.message);
-      }
+    let snapshot;
+    try {
+      snapshot = await this.adminDb.collection('users').doc(uid).collection('searchRuns').get();
+    } catch (error) {
+      console.warn(`[SearchRuns] Firestore public read failed, status=${firestoreFailureStatus(error)}`);
+      throw new FirestoreReadError('SearchRuns');
     }
 
-    // 2. Filter strictly by Search Run's OWN visibility === 'public'
+    const runs: SearchRun[] = snapshot.docs.map((doc) => {
+      const raw = doc.data();
+      const visibility: ResourceVisibility = raw.visibility === 'public' ? 'public' : 'private';
+      return {
+        id: doc.id,
+        querySetId: raw.querySetId || null,
+        querySetName: raw.querySetName || null,
+        status: raw.status || 'completed',
+        queryCount: Number(raw.queryCount || 0),
+        successfulQueries: Number(raw.successfulQueries || 0),
+        failedQueries: Number(raw.failedQueries || 0),
+        totalResults: Number(raw.totalResults || 0),
+        inputYaml: raw.inputYaml || '',
+        startedAt: raw.startedAt || doc.createTime.toDate().toISOString(),
+        completedAt: raw.completedAt || null,
+        createdAt: raw.createdAt || doc.createTime.toDate().toISOString(),
+        visibility,
+      };
+    });
+    userRuns.clear();
+    for (const run of runs) userRuns.set(run.id, run);
+
+    // Filter strictly by Search Run's OWN visibility === 'public'.
     // Independent from Query Set visibility
-    let matchedRuns = Array.from(userRuns.values()).filter((run) => run.visibility === 'public');
+    let matchedRuns = runs.filter((run) => run.visibility === 'public');
 
     // Optional filter by querySetId if provided
     if (querySetId) {
@@ -551,24 +596,11 @@ export class FirestoreService {
 
   async getPublicSearchRunDetails(uid: string, runId: string): Promise<PublicSearchRun | null> {
     const userDetails = getOrCreateUserMap(inMemoryRunDetails, uid);
+    const details = await this.loadSearchRunDetailsFromFirestore(uid, runId);
+    if (details) userDetails.set(runId, details);
+    else userDetails.delete(runId);
 
-    // 1. Authoritative fetch from Firestore if missing or incomplete
-    let details = userDetails.get(runId);
-    if (!details || !details.queryResults || details.queryResults.length === 0 || !details.visibility) {
-      if (this.adminDb) {
-        try {
-          const loaded = await this.loadSearchRunDetailsFromFirestore(uid, runId);
-          if (loaded) {
-            details = loaded;
-            userDetails.set(runId, loaded);
-          }
-        } catch (e: any) {
-          console.warn('[Firestore Admin] getPublicSearchRunDetails notice:', e.message);
-        }
-      }
-    }
-
-    // 2. CRITICAL: Search Run must exist and have visibility === 'public'
+    // Search Run must exist and have visibility === 'public'.
     // Do NOT require Query Set to exist or be public!
     if (!details || details.visibility !== 'public') {
       return null;
@@ -616,17 +648,20 @@ export class FirestoreService {
   }
 
   async deleteQuerySet(idToken: string, uid: string, querySetId: string): Promise<void> {
-    const userMemory = getOrCreateUserMap(inMemoryQuerySets, uid);
-    userMemory.delete(querySetId);
-
     try {
       const url = `${this.baseUrl}/users/${uid}/querySets/${encodeURIComponent(querySetId)}`;
-      await fetch(url, {
+      const res = await fetch(url, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${idToken}` },
       });
-    } catch {
-      // ignore
+      if (!res.ok && res.status !== 404) {
+        throw Object.assign(new Error('Firestore request failed'), { status: res.status });
+      }
+
+      getOrCreateUserMap(inMemoryQuerySets, uid).delete(querySetId);
+    } catch (error) {
+      console.warn(`[QuerySets] Firestore write failed, status=${firestoreFailureStatus(error)}`);
+      throw new FirestoreWriteError('QuerySets');
     }
   }
 
@@ -663,16 +698,6 @@ export class FirestoreService {
       visibility,
     };
 
-    const userRuns = getOrCreateUserMap(inMemorySearchRuns, uid);
-    userRuns.set(runId, payload);
-
-    const userDetails = getOrCreateUserMap(inMemoryRunDetails, uid);
-    userDetails.set(runId, {
-      ...payload,
-      queryResults: [],
-      outputYaml: '',
-    });
-
     try {
       const url = `${this.baseUrl}/users/${uid}/searchRuns/${encodeURIComponent(runId)}`;
       const res = await fetch(url, {
@@ -684,14 +709,17 @@ export class FirestoreService {
         body: JSON.stringify({ fields: toFirestoreFields(payload) }),
       });
       if (!res.ok) {
-        console.warn('[Firestore] createSearchRun error:', res.status, await res.text());
-      } else {
-        console.log(`[Firestore] Created SearchRun document: ${runId}`);
+        throw Object.assign(new Error('Firestore request failed'), { status: res.status });
       }
-    } catch (e) {
-      console.warn('[Firestore] createSearchRun notice:', e);
+    } catch (error) {
+      console.warn(`[SearchRuns] Firestore write failed, status=${firestoreFailureStatus(error)}`);
+      throw new FirestoreWriteError('SearchRuns');
     }
 
+    const userRuns = getOrCreateUserMap(inMemorySearchRuns, uid);
+    userRuns.set(runId, payload);
+    const userDetails = getOrCreateUserMap(inMemoryRunDetails, uid);
+    userDetails.set(runId, { ...payload, queryResults: [], outputYaml: '' });
     return runId;
   }
 
@@ -942,23 +970,55 @@ export class FirestoreService {
 
   async listSearchRuns(idToken: string, uid: string, limitCount = 50): Promise<SearchRun[]> {
     const userMemory = getOrCreateUserMap(inMemorySearchRuns, uid);
+    const cappedLimit = Math.max(1, Math.min(100, Math.floor(Number.isFinite(limitCount) ? limitCount : 50)));
+    console.info(`[SearchRuns] Loading for uid=${uid.slice(0, 6)}`);
 
     try {
-      const url = `${this.baseUrl}/users/${uid}/searchRuns?pageSize=${limitCount}`;
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      let runs: SearchRun[];
 
-      if (res.ok) {
+      if (this.adminDb) {
+        const snapshot = await this.adminDb
+          .collection('users')
+          .doc(uid)
+          .collection('searchRuns')
+          .orderBy('startedAt', 'desc')
+          .limit(cappedLimit)
+          .get();
+
+        runs = snapshot.docs.map((doc) => {
+          const raw = doc.data();
+          const visibility: ResourceVisibility = raw.visibility === 'public' ? 'public' : 'private';
+          return {
+            id: doc.id,
+            querySetId: raw.querySetId || null,
+            querySetName: raw.querySetName || null,
+            status: raw.status || 'completed',
+            queryCount: Number(raw.queryCount || 0),
+            successfulQueries: Number(raw.successfulQueries || 0),
+            failedQueries: Number(raw.failedQueries || 0),
+            totalResults: Number(raw.totalResults || 0),
+            inputYaml: raw.inputYaml || '',
+            startedAt: raw.startedAt || doc.createTime.toDate().toISOString(),
+            completedAt: raw.completedAt || null,
+            createdAt: raw.createdAt || doc.createTime.toDate().toISOString(),
+            visibility,
+          };
+        });
+      } else {
+        const url = `${this.baseUrl}/users/${uid}/searchRuns?pageSize=${cappedLimit}`;
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        if (!res.ok) throw Object.assign(new Error('Firestore request failed'), { status: res.status });
         const data = (await res.json()) as any;
         const docs = Array.isArray(data.documents) ? data.documents : [];
-
-        for (const doc of docs) {
+        runs = docs.map((doc: any) => {
           const id = doc.name.split('/').pop() || '';
           const raw = fromFirestoreFields(doc.fields);
           const visibility: ResourceVisibility = raw.visibility === 'public' ? 'public' : 'private';
-          const item: SearchRun = {
+          return {
             id,
             querySetId: raw.querySetId || null,
             querySetName: raw.querySetName || null,
@@ -973,17 +1033,18 @@ export class FirestoreService {
             createdAt: raw.createdAt || doc.createTime,
             visibility,
           };
-          userMemory.set(id, item);
-        }
-      } else if (res.status !== 404) {
-        console.warn('[Firestore] listSearchRuns notice (using cache):', res.status);
+        });
       }
-    } catch (e) {
-      console.warn('[Firestore] listSearchRuns network notice:', e);
-    }
 
-    const runs = Array.from(userMemory.values());
-    return runs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+      userMemory.clear();
+      for (const run of runs) userMemory.set(run.id, run);
+      console.info(`[SearchRuns] Firestore read succeeded, count=${runs.length}`);
+      return runs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    } catch (error) {
+      const status = firestoreFailureStatus(error);
+      console.warn(`[SearchRuns] Firestore read failed, status=${status}`);
+      throw new FirestoreReadError('SearchRuns');
+    }
   }
 
   async getSearchRunDetails(idToken: string, uid: string, runId: string): Promise<SearchRunDetails | null> {

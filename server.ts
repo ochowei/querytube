@@ -10,7 +10,7 @@ import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import swaggerUi from 'swagger-ui-express';
-import { FirestoreService } from './server/firestoreService.js';
+import { FirestoreReadError, FirestoreService, FirestoreWriteError } from './server/firestoreService.js';
 import { createPublicApiRouter } from './server/publicApi.js';
 
 dotenv.config();
@@ -755,8 +755,9 @@ app.get('/api/query-sets', requireAuth, async (req: Request, res: Response) => {
   try {
     const list = await firestoreService.listQuerySets(req.idToken!, req.user!.uid);
     res.json(list);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to list query sets' });
+  } catch (err: unknown) {
+    const status = err instanceof FirestoreReadError ? err.statusCode : 503;
+    res.status(status).json({ error: 'Failed to load query sets' });
   }
 });
 
@@ -789,8 +790,9 @@ app.post('/api/query-sets', requireAuth, async (req: Request, res: Response) => 
       Boolean(publicApiEnabled)
     );
     res.json(created);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to create query set' });
+  } catch (err: unknown) {
+    const status = err instanceof FirestoreWriteError ? err.statusCode : 500;
+    res.status(status).json({ error: 'Failed to save query set' });
   }
 });
 
@@ -805,8 +807,9 @@ app.put('/api/query-sets/:id', requireAuth, async (req: Request, res: Response) 
       publicApiEnabled: publicApiEnabled !== undefined ? Boolean(publicApiEnabled) : undefined,
     });
     res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to update query set' });
+  } catch (err: unknown) {
+    const status = err instanceof FirestoreWriteError ? err.statusCode : 500;
+    res.status(status).json({ error: 'Failed to update query set' });
   }
 });
 
@@ -821,8 +824,9 @@ app.patch('/api/query-sets/:id/public-api', requireAuth, async (req: Request, re
       publicApiEnabled: Boolean(publicApiEnabled),
     });
     res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to update public API status' });
+  } catch (err: unknown) {
+    const status = err instanceof FirestoreWriteError ? err.statusCode : 500;
+    res.status(status).json({ error: 'Failed to update public API status' });
   }
 });
 
@@ -837,8 +841,9 @@ app.patch('/api/query-sets/:id/rename', requireAuth, async (req: Request, res: R
       name: name.trim(),
     });
     res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to rename query set' });
+  } catch (err: unknown) {
+    const status = err instanceof FirestoreWriteError ? err.statusCode : 500;
+    res.status(status).json({ error: 'Failed to rename query set' });
   }
 });
 
@@ -847,8 +852,9 @@ app.delete('/api/query-sets/:id', requireAuth, async (req: Request, res: Respons
   try {
     await firestoreService.deleteQuerySet(req.idToken!, req.user!.uid, req.params.id);
     res.json({ success: true, message: 'Query set deleted' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to delete query set' });
+  } catch (err: unknown) {
+    const status = err instanceof FirestoreWriteError ? err.statusCode : 500;
+    res.status(status).json({ error: 'Failed to delete query set' });
   }
 });
 
@@ -860,8 +866,9 @@ app.get('/api/search-runs', requireAuth, async (req: Request, res: Response) => 
     const limit = Number(req.query.limit || 50);
     const runs = await firestoreService.listSearchRuns(req.idToken!, req.user!.uid, limit);
     res.json(runs);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to list search runs' });
+  } catch (err: unknown) {
+    const status = err instanceof FirestoreReadError ? err.statusCode : 503;
+    res.status(status).json({ error: 'Failed to load search runs' });
   }
 });
 
@@ -1006,8 +1013,10 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
       queryCount: queries.length,
       inputYaml: rawYaml,
     });
-  } catch (e) {
-    console.warn('[SearchRun Init Warning]:', e);
+  } catch {
+    console.error('[SearchRuns] Failed to create Firestore run document.');
+    res.status(503).json({ error: 'Failed to create search run' });
+    return;
   }
 
   if (isStream) {

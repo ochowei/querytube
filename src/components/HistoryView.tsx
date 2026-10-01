@@ -28,6 +28,7 @@ import { SearchRunDetailModal } from './SearchRunDetailModal';
 interface HistoryViewProps {
   searchRuns: SearchRun[];
   loading: boolean;
+  error?: string | null;
   onRefresh: () => void;
   onLoadRunDetails: (runId: string) => Promise<SearchRunDetails | null>;
   onRunAgain: (inputYaml: string, querySetId?: string | null, querySetName?: string | null) => void;
@@ -40,6 +41,7 @@ interface HistoryViewProps {
 export const HistoryView: React.FC<HistoryViewProps> = ({
   searchRuns,
   loading,
+  error,
   onRefresh,
   onLoadRunDetails,
   onRunAgain,
@@ -195,13 +197,28 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-xs text-amber-200">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-md bg-amber-900/50 px-2.5 py-1.5 font-semibold hover:bg-amber-900 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Loading Indicator */}
       {loading && searchRuns.length === 0 ? (
         <div className="py-16 flex flex-col items-center justify-center text-zinc-500">
           <Loader2 className="w-8 h-8 animate-spin text-red-500 mb-3" />
           <p className="text-xs font-mono">Loading search history...</p>
         </div>
-      ) : filteredRuns.length === 0 ? (
+      ) : error && searchRuns.length === 0 ? null : filteredRuns.length === 0 ? (
         /* Empty State */
         <div className="py-16 px-4 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl text-center space-y-3">
           <div className="mx-auto w-12 h-12 rounded-xl bg-zinc-800/60 border border-zinc-700/50 flex items-center justify-center text-zinc-500">

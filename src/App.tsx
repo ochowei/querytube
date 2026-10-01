@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { Header, AppTab } from './components/Header';
 import { YamlEditor } from './components/YamlEditor';
 import { YamlViewer } from './components/YamlViewer';
@@ -15,12 +15,14 @@ import { HistoryView } from './components/HistoryView';
 import { ApiDocsView } from './components/ApiDocsView';
 import { SaveQuerySetModal } from './components/SaveQuerySetModal';
 import { useAuth } from './context/AuthContext';
+import { authenticatedFetch } from './utils/authenticatedFetch';
 import { validateYamlString, SAMPLE_YAMLS, ValidationResult } from './utils/yamlValidator';
 import { QuerySet, SearchRun, SearchRunDetails, ApiDocsNavigationContext, ResourceVisibility } from './types';
 import { AlertCircle, X, Terminal, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function App() {
-  const { user, authState, getIdToken, setAuthError } = useAuth();
+  const { user, authState, authError, getIdToken, expireSession } = useAuth();
+  const authenticatedUid = authState === 'authenticated' ? user?.uid ?? null : null;
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<AppTab>('search');
@@ -52,11 +54,13 @@ export default function App() {
   // Per-user YouTube API key status
   const [userApiKeyStatus, setUserApiKeyStatus] = useState<UserApiKeyStatus | null>(null);
   const [checkingKeyStatus, setCheckingKeyStatus] = useState<boolean>(false);
+  const [userApiKeyStatusError, setUserApiKeyStatusError] = useState<string | null>(null);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
 
   // Query Sets persistence state
   const [querySets, setQuerySets] = useState<QuerySet[]>([]);
   const [loadingQuerySets, setLoadingQuerySets] = useState<boolean>(false);
+  const [querySetsError, setQuerySetsError] = useState<string | null>(null);
   const [activeQuerySet, setActiveQuerySet] = useState<QuerySet | null>(null);
   const [activeQuerySetOriginalYaml, setActiveQuerySetOriginalYaml] = useState<string | null>(null);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState<boolean>(false);
@@ -65,6 +69,7 @@ export default function App() {
   // Search Runs persistence state
   const [searchRuns, setSearchRuns] = useState<SearchRun[]>([]);
   const [loadingSearchRuns, setLoadingSearchRuns] = useState<boolean>(false);
+  const [searchRunsError, setSearchRunsError] = useState<string | null>(null);
 
   // Notifications
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -72,6 +77,58 @@ export default function App() {
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const initialDataAbortRef = useRef<AbortController | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+  const dataGenerationRef = useRef(0);
+
+  const isCurrentUser = (uid: string, generation?: number) =>
+    currentUserIdRef.current === uid &&
+    (generation === undefined || dataGenerationRef.current === generation);
+
+  const authenticatedApiFetch = (
+    input: RequestInfo | URL,
+    init: RequestInit = {},
+    expectedUid = user?.uid
+  ) => {
+    if (!expectedUid) throw new Error('Authentication is not ready.');
+    return authenticatedFetch(input, init, getIdToken, () => expireSession(expectedUid));
+  };
+
+  useLayoutEffect(() => {
+    if (currentUserIdRef.current === authenticatedUid) return;
+
+    currentUserIdRef.current = authenticatedUid;
+    dataGenerationRef.current += 1;
+    initialDataAbortRef.current?.abort();
+    initialDataAbortRef.current = null;
+    abortControllerRef.current?.abort();
+
+    // Clear every user-owned value before the next user's UI is painted.
+    setUserApiKeyStatus(null);
+    setUserApiKeyStatusError(null);
+    setCheckingKeyStatus(false);
+    setQuerySets([]);
+    setQuerySetsError(null);
+    setLoadingQuerySets(false);
+    setActiveQuerySet(null);
+    setActiveQuerySetOriginalYaml(null);
+    setSearchRuns([]);
+    setSearchRunsError(null);
+    setLoadingSearchRuns(false);
+    setYamlInput(SAMPLE_YAMLS.default.yaml);
+    setOutputYaml('');
+    setOutputData(null);
+    setProgressQueries([]);
+    setCompletedCount(0);
+    setIsRunning(false);
+    setApiDocsContext({});
+    setIsSaveModalOpen(false);
+    setIsSaveAsMode(false);
+    setGlobalError(null);
+    setSuccessNotice(null);
+    setManualValidationNotice(null);
+    setIsKeyModalOpen(false);
+  }, [authenticatedUid]);
 
   // Real-time YAML validation
   const validation: ValidationResult = useMemo(() => {
@@ -85,105 +142,142 @@ export default function App() {
   }, [activeQuerySet, yamlInput, activeQuerySetOriginalYaml]);
 
   // Fetch YouTube API Key status
-  const fetchUserApiKeyStatus = async () => {
+  const fetchUserApiKeyStatus = async (
+    uid = user?.uid,
+    generation = dataGenerationRef.current,
+    signal?: AbortSignal
+  ) => {
+    if (!uid) return;
     setCheckingKeyStatus(true);
+    setUserApiKeyStatusError(null);
     try {
-      const token = await getIdToken();
-      if (!token) return;
-
-      const res = await fetch('/api/settings/youtube-api-key', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authenticatedApiFetch('/api/settings/youtube-api-key', { signal }, uid);
+      if (!isCurrentUser(uid, generation)) return;
 
       if (res.ok) {
         const data = await res.json();
+        if (!isCurrentUser(uid, generation)) return;
         setUserApiKeyStatus({
           configured: Boolean(data.configured),
           suffix: data.suffix,
           verifiedAt: data.verifiedAt,
         });
       } else {
-        setUserApiKeyStatus({ configured: false });
+        throw new Error('Failed to load YouTube API key settings.');
       }
-    } catch {
-      setUserApiKeyStatus({ configured: false });
+    } catch (error) {
+      if (isCurrentUser(uid, generation) && !signal?.aborted) {
+        console.error('[Settings] Failed to load YouTube API key status.');
+        setUserApiKeyStatusError('Failed to load YouTube API key settings.');
+      }
     } finally {
-      setCheckingKeyStatus(false);
+      if (isCurrentUser(uid, generation)) setCheckingKeyStatus(false);
     }
   };
 
   // Fetch Query Sets
-  const fetchQuerySets = async () => {
+  const fetchQuerySets = async (
+    uid = user?.uid,
+    generation = dataGenerationRef.current,
+    signal?: AbortSignal
+  ) => {
+    if (!uid) return;
     setLoadingQuerySets(true);
+    setQuerySetsError(null);
     try {
-      const token = await getIdToken();
-      if (!token) return;
-
-      const res = await fetch('/api/query-sets', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authenticatedApiFetch('/api/query-sets', { signal }, uid);
+      if (!isCurrentUser(uid, generation)) return;
 
       if (res.ok) {
         const list = await res.json();
-        setQuerySets(Array.isArray(list) ? list : []);
+        if (!Array.isArray(list)) throw new Error('Invalid query sets response.');
+        if (!isCurrentUser(uid, generation)) return;
+        setQuerySets(list);
+      } else {
+        throw new Error(`Query sets request failed (${res.status}).`);
       }
     } catch (err) {
-      console.error('Failed to fetch query sets:', err);
+      if (isCurrentUser(uid, generation) && !signal?.aborted) {
+        console.error('[QuerySets] Failed to load saved queries.');
+        setQuerySetsError('Failed to load saved queries. Retry.');
+      }
     } finally {
-      setLoadingQuerySets(false);
+      if (isCurrentUser(uid, generation)) setLoadingQuerySets(false);
     }
   };
 
   // Fetch Search Runs
-  const fetchSearchRuns = async () => {
+  const fetchSearchRuns = async (
+    uid = user?.uid,
+    generation = dataGenerationRef.current,
+    signal?: AbortSignal
+  ) => {
+    if (!uid) return;
     setLoadingSearchRuns(true);
+    setSearchRunsError(null);
     try {
-      const token = await getIdToken();
-      if (!token) return;
-
-      const res = await fetch('/api/search-runs?limit=50', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authenticatedApiFetch('/api/search-runs?limit=50', { signal }, uid);
+      if (!isCurrentUser(uid, generation)) return;
 
       if (res.ok) {
         const list = await res.json();
-        setSearchRuns(Array.isArray(list) ? list : []);
+        if (!Array.isArray(list)) throw new Error('Invalid search runs response.');
+        if (!isCurrentUser(uid, generation)) return;
+        setSearchRuns(list);
+      } else {
+        throw new Error(`Search runs request failed (${res.status}).`);
       }
     } catch (err) {
-      console.error('Failed to fetch search runs:', err);
+      if (isCurrentUser(uid, generation) && !signal?.aborted) {
+        console.error('[SearchRuns] Failed to load search runs.');
+        setSearchRunsError('Failed to load search history. Retry.');
+      }
     } finally {
-      setLoadingSearchRuns(false);
+      if (isCurrentUser(uid, generation)) setLoadingSearchRuns(false);
     }
   };
 
   useEffect(() => {
-    if (authState === 'authenticated') {
-      fetchUserApiKeyStatus();
-      fetchQuerySets();
-      fetchSearchRuns();
-    }
-  }, [authState]);
+    if (authState !== 'authenticated' || !user) return;
+
+    const uid = user.uid;
+    const generation = dataGenerationRef.current;
+    const controller = new AbortController();
+    initialDataAbortRef.current = controller;
+    console.info(`[App] Loading authenticated data for uid=${uid.slice(0, 6)}`);
+
+    void Promise.all([
+      fetchUserApiKeyStatus(uid, generation, controller.signal),
+      fetchQuerySets(uid, generation, controller.signal),
+      fetchSearchRuns(uid, generation, controller.signal),
+    ]);
+
+    return () => {
+      controller.abort();
+      if (initialDataAbortRef.current === controller) initialDataAbortRef.current = null;
+    };
+  }, [authState, user?.uid]);
 
   // YouTube API Key handlers
   const handleSaveUserKey = async (apiKey: string): Promise<{ success: boolean; error?: string }> => {
-    const token = await getIdToken();
-    if (!token) {
+    const ownerUid = user?.uid;
+    if (!ownerUid) {
       return { success: false, error: 'Your session has expired. Please sign in again.' };
     }
 
     try {
-      const res = await fetch('/api/settings/youtube-api-key', {
+      const res = await authenticatedApiFetch('/api/settings/youtube-api-key', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ apiKey }),
-      });
+      }, ownerUid);
 
       const data = await res.json();
 
       if (res.ok && data.success) {
+        if (!isCurrentUser(ownerUid)) return { success: false, error: 'Your session changed. Please try again.' };
         setUserApiKeyStatus({
           configured: true,
           suffix: data.suffix,
@@ -207,16 +301,16 @@ export default function App() {
   };
 
   const handleDeleteUserKey = async (): Promise<boolean> => {
-    const token = await getIdToken();
-    if (!token) return false;
+    const ownerUid = user?.uid;
+    if (!ownerUid) return false;
 
     try {
-      const res = await fetch('/api/settings/youtube-api-key', {
+      const res = await authenticatedApiFetch('/api/settings/youtube-api-key', {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      }, ownerUid);
 
       if (res.ok) {
+        if (!isCurrentUser(ownerUid)) return false;
         setUserApiKeyStatus({ configured: false });
         setSuccessNotice('YouTube API key removed. Searches are disabled until a key is added.');
         setTimeout(() => setSuccessNotice(null), 4000);
@@ -270,25 +364,25 @@ export default function App() {
   };
 
   const executeDirectSave = async (id: string, name: string) => {
-    const token = await getIdToken();
-    if (!token) return;
+    const ownerUid = user?.uid;
+    if (!ownerUid) return;
 
     try {
-      const res = await fetch(`/api/query-sets/${id}`, {
+      const res = await authenticatedApiFetch(`/api/query-sets/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name,
           rawYaml: yamlInput,
           queryCount: validation.queryCount,
         }),
-      });
+      }, ownerUid);
 
       if (res.ok) {
         const updated = await res.json();
+        if (!isCurrentUser(ownerUid)) return;
         setActiveQuerySet(updated);
         setActiveQuerySetOriginalYaml(yamlInput);
         setQuerySets((prev) => prev.map((item) => (item.id === id ? updated : item)));
@@ -304,25 +398,25 @@ export default function App() {
   };
 
   const handleSaveModalConfirm = async (name: string) => {
-    const token = await getIdToken();
-    if (!token) return;
+    const ownerUid = user?.uid;
+    if (!ownerUid) throw new Error('Your session has expired. Please sign in again.');
 
     try {
-      const res = await fetch('/api/query-sets', {
+      const res = await authenticatedApiFetch('/api/query-sets', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name,
           rawYaml: yamlInput,
           queryCount: validation.queryCount,
         }),
-      });
+      }, ownerUid);
 
       if (res.ok) {
         const created = await res.json();
+        if (!isCurrentUser(ownerUid)) return;
         setActiveQuerySet(created);
         setActiveQuerySetOriginalYaml(yamlInput);
         setQuerySets((prev) => [created, ...prev]);
@@ -338,21 +432,21 @@ export default function App() {
   };
 
   const handleRenameQuerySet = async (id: string, newName: string) => {
-    const token = await getIdToken();
-    if (!token) return;
+    const ownerUid = user?.uid;
+    if (!ownerUid) return;
 
     try {
-      const res = await fetch(`/api/query-sets/${id}/rename`, {
+      const res = await authenticatedApiFetch(`/api/query-sets/${id}/rename`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ name: newName }),
-      });
+      }, ownerUid);
 
       if (res.ok) {
         const updated = await res.json();
+        if (!isCurrentUser(ownerUid)) return;
         setQuerySets((prev) => prev.map((qs) => (qs.id === id ? { ...qs, name: newName } : qs)));
         if (activeQuerySet?.id === id) {
           setActiveQuerySet(updated);
@@ -366,16 +460,16 @@ export default function App() {
   };
 
   const handleDeleteQuerySet = async (id: string) => {
-    const token = await getIdToken();
-    if (!token) return;
+    const ownerUid = user?.uid;
+    if (!ownerUid) return;
 
     try {
-      const res = await fetch(`/api/query-sets/${id}`, {
+      const res = await authenticatedApiFetch(`/api/query-sets/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      }, ownerUid);
 
       if (res.ok) {
+        if (!isCurrentUser(ownerUid)) return;
         setQuerySets((prev) => prev.filter((qs) => qs.id !== id));
         if (activeQuerySet?.id === id) {
           setActiveQuerySet(null);
@@ -390,17 +484,16 @@ export default function App() {
   };
 
   const handleTogglePublicApi = async (id: string, enabled: boolean) => {
-    const token = await getIdToken();
-    if (!token) throw new Error('Session expired. Please sign in again.');
+    const ownerUid = user?.uid;
+    if (!ownerUid) throw new Error('Session expired. Please sign in again.');
 
-    const res = await fetch(`/api/query-sets/${id}/public-api`, {
+    const res = await authenticatedApiFetch(`/api/query-sets/${id}/public-api`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ publicApiEnabled: enabled }),
-    });
+    }, ownerUid);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -408,6 +501,7 @@ export default function App() {
     }
 
     const updated: QuerySet = await res.json();
+    if (!isCurrentUser(ownerUid)) return;
     setQuerySets((prev) => prev.map((qs) => (qs.id === id ? updated : qs)));
     if (activeQuerySet?.id === id) {
       setActiveQuerySet(updated);
@@ -423,15 +517,14 @@ export default function App() {
   // --- Search Runs Handlers ---
 
   const handleLoadRunDetails = async (runId: string): Promise<SearchRunDetails | null> => {
-    const token = await getIdToken();
-    if (!token) return null;
+    const ownerUid = user?.uid;
+    if (!ownerUid) return null;
 
     try {
-      const res = await fetch(`/api/search-runs/${runId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authenticatedApiFetch(`/api/search-runs/${runId}`, {}, ownerUid);
       if (res.ok) {
-        return (await res.json()) as SearchRunDetails;
+        const details = (await res.json()) as SearchRunDetails;
+        return isCurrentUser(ownerUid) ? details : null;
       }
     } catch (err) {
       console.error('Failed to load run details:', err);
@@ -440,16 +533,16 @@ export default function App() {
   };
 
   const handleDeleteRun = async (runId: string): Promise<void> => {
-    const token = await getIdToken();
-    if (!token) return;
+    const ownerUid = user?.uid;
+    if (!ownerUid) return;
 
     try {
-      const res = await fetch(`/api/search-runs/${runId}`, {
+      const res = await authenticatedApiFetch(`/api/search-runs/${runId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      }, ownerUid);
 
       if (res.ok) {
+        if (!isCurrentUser(ownerUid)) return;
         setSearchRuns((prev) => prev.filter((r) => r.id !== runId));
         setSuccessNotice('Search run deleted.');
         setTimeout(() => setSuccessNotice(null), 3000);
@@ -460,17 +553,16 @@ export default function App() {
   };
 
   const handleToggleSearchRunVisibility = async (runId: string, visibility: ResourceVisibility) => {
-    const token = await getIdToken();
-    if (!token) throw new Error('Session expired. Please sign in again.');
+    const ownerUid = user?.uid;
+    if (!ownerUid) throw new Error('Session expired. Please sign in again.');
 
-    const res = await fetch(`/api/search-runs/${runId}/visibility`, {
+    const res = await authenticatedApiFetch(`/api/search-runs/${runId}/visibility`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ visibility }),
-    });
+    }, ownerUid);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -478,6 +570,7 @@ export default function App() {
     }
 
     const updated: SearchRun = await res.json();
+    if (!isCurrentUser(ownerUid)) return;
     setSearchRuns((prev) => prev.map((r) => (r.id === runId ? { ...r, visibility: updated.visibility } : r)));
     setSuccessNotice(
       visibility === 'public'
@@ -516,10 +609,7 @@ export default function App() {
     }
 
     setActiveTab('search');
-    // Execute search with brief tick to ensure state sync
-    setTimeout(() => {
-      handleRunSearch(inputYaml, querySetId, querySetName);
-    }, 50);
+    void handleRunSearch(inputYaml, querySetId, querySetName);
   };
 
   // --- Manual Validation ---
@@ -531,29 +621,21 @@ export default function App() {
       return;
     }
 
-    const token = await getIdToken();
-    if (!token) {
+    const ownerUid = user?.uid;
+    if (!ownerUid) {
       setGlobalError('Your session has expired. Please sign in again.');
       return;
     }
 
     try {
-      const res = await fetch('/api/youtube/validate', {
+      const res = await authenticatedApiFetch('/api/youtube/validate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ yaml: yamlInput }),
-      });
-
-      if (res.status === 401) {
-        const freshToken = await getIdToken(true);
-        if (!freshToken) {
-          setGlobalError('Your session has expired. Please sign in again.');
-          return;
-        }
-      }
+      }, ownerUid);
+      if (!isCurrentUser(ownerUid)) return;
 
       if (res.ok) {
         const data = await res.json();
@@ -582,6 +664,12 @@ export default function App() {
   ) => {
     if (isRunning) return;
 
+    const ownerUid = user?.uid;
+    if (!ownerUid) {
+      setGlobalError('Your session has expired. Please sign in again.');
+      return;
+    }
+
     if (!userApiKeyStatus?.configured) {
       setGlobalError('Configure your YouTube API key before running a search.');
       setIsKeyModalOpen(true);
@@ -598,13 +686,6 @@ export default function App() {
 
     setGlobalError(null);
     setManualValidationNotice(null);
-
-    const idToken = await getIdToken();
-    if (!idToken) {
-      setAuthError('Your session has expired. Please sign in again.');
-      setGlobalError('Your session has expired. Please sign in again.');
-      return;
-    }
 
     setIsRunning(true);
 
@@ -628,37 +709,16 @@ export default function App() {
     };
 
     try {
-      let response = await fetch('/api/youtube/search?stream=true', {
+      const response = await authenticatedApiFetch('/api/youtube/search?stream=true', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
-          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify(requestPayload),
         signal: controller.signal,
-      });
-
-      if (response.status === 401) {
-        const refreshedToken = await getIdToken(true);
-        if (!refreshedToken) {
-          setAuthError('Your session has expired. Please sign in again.');
-          setGlobalError('Your session has expired. Please sign in again.');
-          setIsRunning(false);
-          return;
-        }
-
-        response = await fetch('/api/youtube/search?stream=true', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'text/event-stream',
-            Authorization: `Bearer ${refreshedToken}`,
-          },
-          body: JSON.stringify(requestPayload),
-          signal: controller.signal,
-        });
-      }
+      }, ownerUid);
+      if (!isCurrentUser(ownerUid)) return;
 
       if (response.status === 428) {
         setUserApiKeyStatus({ configured: false });
@@ -692,6 +752,7 @@ export default function App() {
 
       while (true) {
         const { done, value } = await reader.read();
+        if (!isCurrentUser(ownerUid)) break;
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -743,7 +804,7 @@ export default function App() {
                 setOutputData(event.data);
               }
               // Refresh search history list asynchronously
-              fetchSearchRuns();
+              void fetchSearchRuns(ownerUid, dataGenerationRef.current);
             } else if (event.type === 'fatal_error') {
               if (event.error === 'YOUTUBE_API_KEY_REQUIRED') {
                 setUserApiKeyStatus({ configured: false });
@@ -757,14 +818,16 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        setGlobalError('Search stopped by user.');
-      } else {
-        setGlobalError(err.message || 'Failed to execute search. Check your network or server status.');
+      if (isCurrentUser(ownerUid)) {
+        if (err.name === 'AbortError') {
+          setGlobalError('Search stopped by user.');
+        } else {
+          setGlobalError(err.message || 'Failed to execute search. Check your network or server status.');
+        }
       }
     } finally {
-      setIsRunning(false);
-      abortControllerRef.current = null;
+      if (isCurrentUser(ownerUid)) setIsRunning(false);
+      if (abortControllerRef.current === controller) abortControllerRef.current = null;
     }
   };
 
@@ -780,7 +843,9 @@ export default function App() {
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-zinc-400">
         <Loader2 className="w-9 h-9 animate-spin text-red-500 mb-4" />
         <h2 className="text-base font-semibold text-zinc-200">QueryTube</h2>
-        <p className="text-xs text-zinc-500 mt-1 font-mono">Authenticating session...</p>
+        <p className="text-xs text-zinc-500 mt-1 font-mono">
+          {authError || 'Authenticating session...'}
+        </p>
       </div>
     );
   }
@@ -861,6 +926,20 @@ export default function App() {
         {/* Tab 1: Search View */}
         {activeTab === 'search' && (
           <div className="flex-1 flex flex-col gap-4">
+            {userApiKeyStatusError && (
+              <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-xs text-amber-200">
+                <span>{userApiKeyStatusError}</span>
+                <button
+                  type="button"
+                  onClick={() => void fetchUserApiKeyStatus()}
+                  disabled={checkingKeyStatus}
+                  className="rounded-md bg-amber-900/50 px-2.5 py-1.5 font-semibold hover:bg-amber-900 disabled:opacity-50"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             {/* Inline setup warning if user has NO API key configured */}
             {userApiKeyStatus?.configured === false && (
               <div className="animate-in fade-in duration-300">
@@ -937,8 +1016,11 @@ export default function App() {
         {/* Tab 2: Queries View */}
         {activeTab === 'queries' && (
           <QueriesView
+            key={user?.uid}
             querySets={querySets}
             loading={loadingQuerySets}
+            error={querySetsError}
+            onRetry={() => void fetchQuerySets()}
             onLoadQuerySet={handleLoadQuerySet}
             onCreateNew={() => {
               handleNewQuerySet();
@@ -955,9 +1037,11 @@ export default function App() {
         {/* Tab 3: History View */}
         {activeTab === 'history' && (
           <HistoryView
+            key={user?.uid}
             searchRuns={searchRuns}
             loading={loadingSearchRuns}
-            onRefresh={fetchSearchRuns}
+            error={searchRunsError}
+            onRefresh={() => void fetchSearchRuns()}
             onLoadRunDetails={handleLoadRunDetails}
             onRunAgain={handleRunAgain}
             onDeleteRun={handleDeleteRun}
