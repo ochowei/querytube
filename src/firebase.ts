@@ -34,7 +34,7 @@ function initializeLocalPersistentAuth() {
 }
 
 export const auth = initializeLocalPersistentAuth();
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app);
 
 export const googleProvider = new GoogleAuthProvider();
 // Only request basic identity info (profile, email)

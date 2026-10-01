@@ -1,12 +1,9 @@
 {
-  "projectId": "sapient-spark-z83d0",
-  "appId": "1:902441642780:web:97ecd8c2f582961616a8d9",
-  "apiKey": "AIzaSyDU4ak3DBJFhJ4s9tK_cGtdPh6ZLSALi1U",
-  "authDomain": "sapient-spark-z83d0.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-youtubeyamlsearc-83e4e646-42fd-44b9-a9a0-7af77ee13b93",
-  "storageBucket": "sapient-spark-z83d0.firebasestorage.app",
-  "messagingSenderId": "902441642780",
-  "measurementId": "",
-  "oAuthClientId": "902441642780-d3ple0ktdqm4cksg032440e8bl4smfbf.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "apiKey": "AIzaSyDOKW1vJN8IOjLbwrm4FrcBZKJVCt73Wkg",
+  "authDomain": "querytube-c1947.firebaseapp.com",
+  "projectId": "querytube-c1947",
+  "storageBucket": "querytube-c1947.firebasestorage.app",
+  "messagingSenderId": "389662586344",
+  "appId": "1:389662586344:web:cf70fe6a6a9222a994605d",
+  "measurementId": "G-WDHJQ79F96"
 }
