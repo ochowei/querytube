@@ -4,6 +4,7 @@ import {
   initializeAuth,
   GoogleAuthProvider,
   browserLocalPersistence,
+  browserPopupRedirectResolver,
 } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
@@ -14,7 +15,10 @@ function initializeLocalPersistentAuth() {
   try {
     // Configure persistence as part of Auth initialization. Calling
     // setPersistence() after getAuth() can race with the first auth observer.
-    return initializeAuth(app, { persistence: browserLocalPersistence });
+    return initializeAuth(app, {
+      persistence: browserLocalPersistence,
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
   } catch (error) {
     // Supports Vite HMR or another module that already initialized this app's Auth.
     if (
