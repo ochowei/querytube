@@ -53,7 +53,7 @@
 **新增／調整**
 
 - 使用 root `server.ts` 作為 Vercel Express entrypoint，匯出同一個 Express app；明確設定 `framework: "express"`，採用 Vercel Express adapter，不另加 catch-all/rewrite。
-- 新增最小 `vercel.json`：執行 Vite build，並將 `openapi/public-api.yaml` 與 SPA entry file 納入 Function。Function duration 沿用 Vercel project 設定，不在未知方案下硬編上限；preview 時確認最長正常 SSE request 可在實際 duration 內完成。
+- 新增最小 `vercel.json` 執行 Vite build；OpenAPI YAML 與 SPA entry file 透過 app 中可靜態追蹤的檔案讀取納入 Express Function，不在 `functions` 設定中指定 root `server.ts` pattern。Function duration 沿用 Vercel project 設定，不在未知方案下硬編上限；preview 時確認最長正常 SSE request 可在實際 duration 內完成。
 - Vite 改輸出 `public/`，讓 Vercel 透過 CDN 提供靜態檔；Express 不負責 Vercel production 的 `express.static()`。
 - Vercel 靜態檔交由 CDN 提供，非靜態請求需到 Express。舊 production launcher 的最後一條 `app.get('*')` 會把未知 GET path（包含未定義的 `/api/*`）回傳為 SPA；目前 app 保留這個行為。已列出的 API path 必須完全相容；若要調整未知 API path 的 fallback，先確認沒有 client 依賴並把差異限制在未定義路徑。
 
@@ -85,7 +85,7 @@
 
 - 逐項標記目前 module-level `Map` 的用途、讀取順序、失敗 fallback 與可見性影響。保留安全的效能快取；確認冷啟動時來源資料可從 Firestore 載入。Public API 的 `publicApiEnabled`／`visibility` 判斷不可依賴 cache。
 - 保留 `server/publicApi.ts` 現行每 IP 每分鐘 100 次的 limiter 作為 per-instance best effort，且文件不宣稱它是 distributed limit。若要配置 Vercel WAF，門檻與生效環境列為部署設定，不能默默以另一組規則替代。
-- `server/app.ts` 從穩定的 module-relative path 讀取 `openapi/public-api.yaml`，並在 Vercel Function 設定中確認該 YAML 有被打包。保持 JSON endpoint、Express Swagger UI 與應用內 Swagger UI 的既有路徑／功能。
+- `server/app.ts` 從穩定的 module-relative path 讀取 `openapi/public-api.yaml`，並確認 Node File Trace 將該 YAML 納入 Vercel Function。保持 JSON endpoint、Express Swagger UI 與應用內 Swagger UI 的既有路徑／功能。
 
 ### Phase E — SSE Search 與執行時間
 
