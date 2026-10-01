@@ -32,7 +32,7 @@
 
 1. 從 Cloud Run 現有環境設定確認實際 Firebase project ID、named Firestore database ID、`USER_API_KEY_ENCRYPTION_KEY` 的生效值及 Admin 身分來源。這些值不能從 repo 推定；若無法確認舊 encryption key，先不切換使用者 key 的讀寫流量。
 2. 在 Vercel 專案確認 Node runtime 版本、方案／Fluid Compute 設定及函式最長執行時間。Search YAML 沒有目前可見的 query 數上限；不能只依範例把 `maxDuration` 寫成 300 秒。依實際方案設定並用正常最大工作量驗證 SSE。若工作可能超出上限，暫停 cutover，另行討論相容方案，不在 migration 中悄悄改成 polling 或非同步 job。
-3. 用 Vercel preview/`vercel dev` 驗證 Vite 靜態輸出與 root Express Function 的 route mapping。Express framework adapter 會把 app 部署為單一 Function；特別確認巢狀 `/api/*`、`/openapi.json`、`/api-docs/` 會到 Express，且 Express 收到的 pathname 保持原值。實作採 root `server.ts` entrypoint，不新增 `api/index.ts` 或 rewrites；若 Preview 顯示路由差異，再依實測修正。
+3. 用 Vercel preview/`vercel dev` 驗證 Vite 靜態輸出與 `api/index.ts` Express Function 的 route mapping。使用 Vite preset 發布 build 產生的 `public/`；未匹配靜態檔的請求 rewrite 到單一 Express Function。確認巢狀 `/api/*`、`/openapi.json`、`/api-docs/` 會到 Express，且 Express 收到的 pathname 保持原值。
 4. Vercel 文件目前說明 Express app 會作為單一 Function 部署，且 `express.static()` 不負責提供靜態檔；本 repo 應由 Vite build 輸出靜態前端，Function 只負責 backend。參考：[Express on Vercel](https://vercel.com/docs/frameworks/backend/express)、[Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite)。
 
 ## 3. 分階段 Implementation Plan
@@ -43,7 +43,7 @@
 
 - 新增 `server/app.ts`：建立 Express app、JSON middleware、認證 middleware 與現有 routes，最後 export app；不呼叫 `listen()`、不掛 Vite、不 serve 靜態檔。
 - 新增 `server/firebaseAdmin.ts`：集中初始化 Admin app、Auth、named Firestore database；沿用 `getApps()` 防止 warm instance 重複初始化。
-- 將 root `server.ts` 設為 Vercel Express entrypoint，default export 同一個 app；新增 `server/dev.ts` 保留 Vite dev middleware、本機／Cloud Run static + SPA fallback 與 `PORT` listener。
+- 使用 `api/index.ts` 作為 Vercel Function entrypoint，default export 同一個 app；`server.ts` 保留 root Express export，`server/dev.ts` 保留 Vite dev middleware、本機／Cloud Run static + SPA fallback 與 `PORT` listener。
 - `dev`、`start` scripts 改指向 `server/dev.ts`，維持命令與本機／Cloud Run listener 行為；Vercel entrypoint 不呼叫 `listen()`，也不讀取 `PORT`。部署環境若使用自訂命令直接執行 `server.ts`，cutover 前須確認改用 `npm start`／`bun run start`。
 
 **相容性檢查**：保留 route 順序、middleware、JSON 10 MB limit、status code、錯誤 body、SSE 事件內容及同源路徑。搬移檔案後檢查 `__dirname`／`import.meta.url` 相對路徑，尤其是 OpenAPI YAML。
@@ -52,7 +52,7 @@
 
 **新增／調整**
 
-- 使用 root `server.ts` 作為 Vercel Express entrypoint，匯出同一個 Express app；明確設定 `framework: "express"`，採用 Vercel Express adapter，不另加 catch-all/rewrite。
+- 使用 `api/index.ts` 作為 Vercel Node Function entrypoint，匯出同一個 Express app；明確設定 `framework: "vite"`、`outputDirectory: "public"`，並將未匹配靜態檔的請求 rewrite 到 Express。原生 Express preset 沒有收集 build 時才產生的 Vite 資源，已實測造成 JS URL 回傳 SPA HTML，因此改由 Vite preset 發布靜態產物。
 - 新增最小 `vercel.json`：執行 Vite build，並將 `openapi/public-api.yaml` 與 SPA entry file 納入 Function。Function duration 沿用 Vercel project 設定，不在未知方案下硬編上限；preview 時確認最長正常 SSE request 可在實際 duration 內完成。
 - Vite 改輸出 `public/`，讓 Vercel 透過 CDN 提供靜態檔；Express 不負責 Vercel production 的 `express.static()`。
 - Vercel 靜態檔交由 CDN 提供，非靜態請求需到 Express。舊 production launcher 的最後一條 `app.get('*')` 會把未知 GET path（包含未定義的 `/api/*`）回傳為 SPA；目前 app 保留這個行為。已列出的 API path 必須完全相容；若要調整未知 API path 的 fallback，先確認沒有 client 依賴並把差異限制在未定義路徑。
@@ -121,7 +121,7 @@ Repo 目前沒有測試工具或 `test` script；migration 不額外引入測試
 
 ## 4. 交付檔案預期
 
-實作階段新增：`server/app.ts`、`server/firebaseAdmin.ts`、`server/dev.ts`、Vercel root Express entrypoint、`vercel.json`、`README.md`。修改：`server.ts`、`package.json`、`.env.example`、`.gitignore`、`vite.config.ts`。不改 Firestore schema、API URL、React UI 流程或 Firebase provider。
+實作階段新增：`server/app.ts`、`server/firebaseAdmin.ts`、`server/dev.ts`、`api/index.ts`、`vercel.json`、`README.md`。修改：`server.ts`、`package.json`、`.env.example`、`.gitignore`、`vite.config.ts`。不改 Firestore schema、API URL、React UI 流程或 Firebase provider。
 
 ## 5. Cutover Acceptance Criteria
 

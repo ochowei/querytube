@@ -21,11 +21,11 @@ bun run lint
 bun run build
 ```
 
-The Vite build writes static files to `public/`. Vercel serves those files through its CDN and detects the Express app exported by the root `server.ts` as a Node.js Function.
+The Vite build writes static files to `public/`. Vercel uses the Vite preset to publish those files through its CDN. Requests that do not match a static file are rewritten to the Express app exported by `api/index.ts`, preserving the existing API and documentation URLs.
 
 ## Vercel deployment
 
-Import the repository into Vercel and configure the project to use Node.js 22. The repository `vercel.json` runs `bun run build` and includes the OpenAPI YAML and SPA entry file in the Function bundle. Function duration follows the Vercel project and plan settings; confirm those settings allow the longest expected streaming search before production cutover. Vercel's current Express runtime uses Fluid Compute by default and documents a 300-second default duration, with higher limits depending on plan.
+Import the repository into Vercel and configure the project to use Node.js 22. The repository `vercel.json` selects the Vite preset, runs `bun run build`, publishes `public/`, and includes the OpenAPI YAML and SPA entry file in the `api/index.ts` Function bundle. Function duration follows the Vercel project and plan settings; confirm those settings allow the longest expected streaming search before production cutover.
 
 Configure these variables in each Vercel environment that needs backend access:
 

@@ -1,10 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "express",
+  "framework": "vite",
   "buildCommand": "bun run build",
+  "outputDirectory": "public",
   "functions": {
-    "server.ts": {
+    "api/index.ts": {
       "includeFiles": "{openapi/public-api.yaml,public/index.html}"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ]
 }

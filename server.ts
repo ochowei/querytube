@@ -1,7 +1,7 @@
 import express from 'express';
 import app from './server/app.js';
 
-// Vercel detects Express from this root entrypoint and invokes the exported app.
+// Reusable root Express entrypoint. Vercel uses api/index.ts with the Vite preset.
 // The local and Cloud Run server lifecycle lives in server/dev.ts.
 void express;
 
