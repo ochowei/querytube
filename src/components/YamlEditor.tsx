@@ -10,8 +10,12 @@ import {
   Layers,
   HelpCircle,
   KeyRound,
+  Save,
+  Plus,
+  BookmarkPlus,
 } from 'lucide-react';
 import { SAMPLE_YAMLS, ValidationResult } from '../utils/yamlValidator';
+import { QuerySet } from '../types';
 
 interface YamlEditorProps {
   value: string;
@@ -22,6 +26,11 @@ interface YamlEditorProps {
   isRunning: boolean;
   apiKeyConfigured: boolean | null;
   onOpenKeySettings?: () => void;
+  activeQuerySet: QuerySet | null;
+  hasUnsavedChanges: boolean;
+  onNew: () => void;
+  onSave: () => void;
+  onSaveAs: () => void;
 }
 
 export const YamlEditor: React.FC<YamlEditorProps> = ({
@@ -33,6 +42,11 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
   isRunning,
   apiKeyConfigured,
   onOpenKeySettings,
+  activeQuerySet,
+  hasUnsavedChanges,
+  onNew,
+  onSave,
+  onSaveAs,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -84,17 +98,68 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-sm">
-      {/* Header Bar */}
-      <div className="px-4 py-3 bg-zinc-950/70 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+      {/* Query Set Status & Persistence Bar */}
+      <div className="px-4 py-2 bg-zinc-950 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono text-zinc-400">Query Set:</span>
+          <span className="text-xs font-semibold text-zinc-100">
+            {activeQuerySet ? activeQuerySet.name : 'Unsaved Query Set'}
+          </span>
+          {hasUnsavedChanges && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-300 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.2 rounded">
+              • Unsaved changes
+            </span>
+          )}
+        </div>
+
+        {/* Persistence Actions: New / Save / Save As */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onNew}
+            disabled={isRunning}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+            title="Start a new blank or default query set"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isRunning || !value.trim()}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-white text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+            title={activeQuerySet ? `Update ${activeQuerySet.name}` : 'Save this Query Set'}
+          >
+            <Save className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Save</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onSaveAs}
+            disabled={isRunning || !value.trim()}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-300 hover:text-white text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+            title="Save as a new Query Set with a new ID"
+          >
+            <BookmarkPlus className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Save As</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Editor Sub-Header Bar */}
+      <div className="px-4 py-2.5 bg-zinc-950/60 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <FileCode className="w-4 h-4 text-zinc-400" />
-          <h2 className="text-sm font-semibold text-zinc-200">Input YAML</h2>
-          <span className="text-[11px] font-mono text-zinc-500 bg-zinc-800/60 px-1.5 py-0.5 rounded">
+          <h2 className="text-xs font-semibold text-zinc-300">YAML Definition</h2>
+          <span className="text-[10px] font-mono text-zinc-500 bg-zinc-800/60 px-1 py-0.2 rounded">
             UTF-8
           </span>
         </div>
 
-        {/* Action Controls */}
+        {/* File controls & Presets */}
         <div className="flex items-center gap-1.5 text-xs">
           {/* File Upload */}
           <input
@@ -112,7 +177,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isRunning}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50 text-[11px]"
             title="Upload .yaml or .yml file"
           >
             <Upload className="w-3.5 h-3.5 text-zinc-400" />
@@ -125,10 +190,10 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
               type="button"
               onClick={() => setShowPresets(!showPresets)}
               disabled={isRunning}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50 text-[11px]"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Load Example</span>
+              <span>Examples</span>
             </button>
 
             {showPresets && (
@@ -220,7 +285,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
 
       {/* Editor Body with Drag & Drop & Line Numbers */}
       <div
-        className={`relative flex-1 min-h-[360px] flex font-mono text-xs overflow-hidden ${
+        className={`relative flex-1 min-h-[350px] flex font-mono text-xs overflow-hidden ${
           isDragging ? 'ring-2 ring-red-500 bg-red-950/10' : 'bg-zinc-950'
         }`}
         onDragOver={handleDragOver}
@@ -344,7 +409,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
               }`}
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>{isRunning ? 'Searching...' : 'Run YouTube Search'}</span>
+              <span>{isRunning ? 'Searching...' : 'Run Search'}</span>
             </button>
           </div>
         </div>

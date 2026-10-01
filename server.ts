@@ -9,6 +9,7 @@ import { load, dump } from 'js-yaml';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { FirestoreService } from './server/firestoreService.js';
 
 dotenv.config();
 
@@ -37,6 +38,11 @@ try {
 const adminApp = getApps().length === 0 ? initializeApp({ projectId: firebaseProjectId }) : getApps()[0];
 const adminAuth = getAuth(adminApp);
 const db = firestoreDatabaseId ? getFirestore(adminApp, firestoreDatabaseId) : getFirestore(adminApp);
+
+const firestoreService = new FirestoreService(
+  firebaseProjectId,
+  firestoreDatabaseId || 'ai-studio-youtubeyamlsearc-83e4e646-42fd-44b9-a9a0-7af77ee13b93'
+);
 
 export interface AuthenticatedUser {
   uid: string;
@@ -744,6 +750,128 @@ app.get(['/api/config', '/api/youtube/status'], requireAuth, async (req: Request
   });
 });
 
+// --- QUERY SETS REST API ---
+
+// GET /api/query-sets - List saved query sets
+app.get('/api/query-sets', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const list = await firestoreService.listQuerySets(req.idToken!, req.user!.uid);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to list query sets' });
+  }
+});
+
+// GET /api/query-sets/:id - Get single query set
+app.get('/api/query-sets/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const item = await firestoreService.getQuerySet(req.idToken!, req.user!.uid, req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Query set not found' });
+    }
+    res.json(item);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to get query set' });
+  }
+});
+
+// POST /api/query-sets - Create new query set
+app.post('/api/query-sets', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { name, rawYaml, queryCount } = req.body || {};
+    if (typeof rawYaml !== 'string') {
+      return res.status(400).json({ error: 'Missing rawYaml in request body' });
+    }
+    const created = await firestoreService.createQuerySet(
+      req.idToken!,
+      req.user!.uid,
+      name || 'Untitled Query Set',
+      rawYaml,
+      Number(queryCount || 0)
+    );
+    res.json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to create query set' });
+  }
+});
+
+// PUT /api/query-sets/:id - Update existing query set
+app.put('/api/query-sets/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { name, rawYaml, queryCount } = req.body || {};
+    const updated = await firestoreService.updateQuerySet(req.idToken!, req.user!.uid, req.params.id, {
+      name,
+      rawYaml,
+      queryCount: queryCount !== undefined ? Number(queryCount) : undefined,
+    });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to update query set' });
+  }
+});
+
+// PATCH /api/query-sets/:id/rename - Rename query set
+app.patch('/api/query-sets/:id/rename', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { name } = req.body || {};
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'Valid name is required' });
+    }
+    const updated = await firestoreService.updateQuerySet(req.idToken!, req.user!.uid, req.params.id, {
+      name: name.trim(),
+    });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to rename query set' });
+  }
+});
+
+// DELETE /api/query-sets/:id - Delete query set (Search runs remain intact)
+app.delete('/api/query-sets/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    await firestoreService.deleteQuerySet(req.idToken!, req.user!.uid, req.params.id);
+    res.json({ success: true, message: 'Query set deleted' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to delete query set' });
+  }
+});
+
+// --- SEARCH RUNS REST API ---
+
+// GET /api/search-runs - List search runs metadata (newest first, lightweight)
+app.get('/api/search-runs', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const limit = Number(req.query.limit || 50);
+    const runs = await firestoreService.listSearchRuns(req.idToken!, req.user!.uid, limit);
+    res.json(runs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to list search runs' });
+  }
+});
+
+// GET /api/search-runs/:id - Get detailed search run with subcollections and reconstructed YAML
+app.get('/api/search-runs/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const details = await firestoreService.getSearchRunDetails(req.idToken!, req.user!.uid, req.params.id);
+    if (!details) {
+      return res.status(404).json({ error: 'Search run not found' });
+    }
+    res.json(details);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to get search run details' });
+  }
+});
+
+// DELETE /api/search-runs/:id - Recursively delete search run and its subcollections
+app.delete('/api/search-runs/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    await firestoreService.deleteSearchRunRecursively(req.idToken!, req.user!.uid, req.params.id);
+    res.json({ success: true, message: 'Search run and associated records deleted' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to delete search run' });
+  }
+});
+
 // POST /api/youtube/validate - validates YAML syntax and structure (authenticated)
 app.post('/api/youtube/validate', requireAuth, (req: Request, res: Response) => {
   const rawYaml = req.body?.yaml;
@@ -775,9 +903,11 @@ app.post('/api/youtube/validate', requireAuth, (req: Request, res: Response) => 
   }
 });
 
-// POST /api/youtube/search (protected with requireAuth middleware, uses user's own encrypted key)
+// POST /api/youtube/search (protected with requireAuth middleware, creates SearchRun and records to Firestore)
 app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response) => {
   const rawYaml = req.body?.yaml;
+  const querySetId = req.body?.querySetId || null;
+  const querySetName = req.body?.querySetName || null;
   const isStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
 
   const uid = req.user!.uid;
@@ -832,15 +962,29 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
   const queries = searchConfig.queries;
   const defaults = searchConfig.defaults;
 
+  // 1. Create a historical Search Run document in Firestore with status 'running'
+  let runId = `run_${Date.now()}`;
+  try {
+    runId = await firestoreService.createSearchRun(req.idToken!, uid, {
+      querySetId,
+      querySetName,
+      queryCount: queries.length,
+      inputYaml: rawYaml,
+    });
+  } catch (e) {
+    console.warn('[SearchRun Init Warning]:', e);
+  }
+
   if (isStream) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Send initial start event
+    // Send initial start event including runId
     res.write(
       `data: ${JSON.stringify({
         type: 'start',
+        runId,
         total: queries.length,
         queries: queries.map((q) => ({ id: q.id, q: q.q })),
       })}\n\n`
@@ -861,11 +1005,38 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
         })}\n\n`
       );
 
+      const qStartedAt = new Date().toISOString();
       const outcome = await executeYouTubeQuery(query, defaults, apiKey);
+      const qCompletedAt = new Date().toISOString();
       completedCount++;
 
       if (outcome.success && outcome.result) {
         results.push(outcome.result);
+
+        // Persist query result and video documents to Firestore subcollections asynchronously
+        firestoreService
+          .saveQueryResultAndVideos(req.idToken!, uid, runId, {
+            sourceQueryId: query.id,
+            query: query.q,
+            relevanceLanguage: query.relevance_language,
+            regionCode: query.region_code,
+            status: 'success',
+            resultCount: outcome.result.count,
+            startedAt: qStartedAt,
+            completedAt: qCompletedAt,
+            videos: outcome.result.videos.map((v) => ({
+              videoId: v.video_id,
+              title: v.title,
+              channelId: v.channel_id,
+              channelTitle: v.channel_title,
+              publishedAt: v.published_at,
+              description: v.description,
+              url: v.url,
+              thumbnailUrl: v.thumbnail_url,
+            })),
+          })
+          .catch((e) => console.warn('[Firestore saveQueryResult error]:', e));
+
         res.write(
           `data: ${JSON.stringify({
             type: 'query_success',
@@ -879,6 +1050,24 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
         );
       } else if (outcome.error) {
         errors.push(outcome.error);
+
+        // Persist failed query result to Firestore
+        firestoreService
+          .saveQueryResultAndVideos(req.idToken!, uid, runId, {
+            sourceQueryId: query.id,
+            query: query.q,
+            relevanceLanguage: query.relevance_language,
+            regionCode: query.region_code,
+            status: 'failed',
+            resultCount: 0,
+            errorCode: 'QUERY_EXECUTION_ERROR',
+            errorMessage: outcome.error.error,
+            startedAt: qStartedAt,
+            completedAt: qCompletedAt,
+            videos: [],
+          })
+          .catch((e) => console.warn('[Firestore saveQueryResult error]:', e));
+
         res.write(
           `data: ${JSON.stringify({
             type: 'query_error',
@@ -893,9 +1082,23 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
     });
 
     const totalResults = results.reduce((acc, r) => acc + r.count, 0);
+    const finalStatus: 'completed' | 'partial' | 'failed' =
+      errors.length === 0 ? 'completed' : results.length > 0 ? 'partial' : 'failed';
+
+    // Update SearchRun document with final summary
+    const completedAt = new Date().toISOString();
+    firestoreService
+      .updateSearchRunSummary(req.idToken!, uid, runId, {
+        status: finalStatus,
+        successfulQueries: results.length,
+        failedQueries: errors.length,
+        totalResults,
+        completedAt,
+      })
+      .catch((e) => console.warn('[Firestore updateSearchRunSummary error]:', e));
 
     const outputObj = {
-      generated_at: new Date().toISOString(),
+      generated_at: completedAt,
       summary: {
         queries: queries.length,
         successful: results.length,
@@ -916,6 +1119,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
     res.write(
       `data: ${JSON.stringify({
         type: 'complete',
+        runId,
         outputYaml,
         data: outputObj,
       })}\n\n`
@@ -926,25 +1130,76 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
   }
 
   // Non-streaming standard endpoint
-  const outcomes = await runWithConcurrency(queries, 3, async (query) => {
-    return executeYouTubeQuery(query, defaults, apiKey);
-  });
-
   const results: QuerySuccessResult[] = [];
   const errors: QueryErrorResult[] = [];
 
-  for (const outcome of outcomes) {
+  const outcomes = await runWithConcurrency(queries, 3, async (query) => {
+    const qStartedAt = new Date().toISOString();
+    const outcome = await executeYouTubeQuery(query, defaults, apiKey);
+    const qCompletedAt = new Date().toISOString();
+
     if (outcome.success && outcome.result) {
       results.push(outcome.result);
+      firestoreService
+        .saveQueryResultAndVideos(req.idToken!, uid, runId, {
+          sourceQueryId: query.id,
+          query: query.q,
+          relevanceLanguage: query.relevance_language,
+          regionCode: query.region_code,
+          status: 'success',
+          resultCount: outcome.result.count,
+          startedAt: qStartedAt,
+          completedAt: qCompletedAt,
+          videos: outcome.result.videos.map((v) => ({
+            videoId: v.video_id,
+            title: v.title,
+            channelId: v.channel_id,
+            channelTitle: v.channel_title,
+            publishedAt: v.published_at,
+            description: v.description,
+            url: v.url,
+            thumbnailUrl: v.thumbnail_url,
+          })),
+        })
+        .catch(() => {});
     } else if (outcome.error) {
       errors.push(outcome.error);
+      firestoreService
+        .saveQueryResultAndVideos(req.idToken!, uid, runId, {
+          sourceQueryId: query.id,
+          query: query.q,
+          relevanceLanguage: query.relevance_language,
+          regionCode: query.region_code,
+          status: 'failed',
+          resultCount: 0,
+          errorCode: 'QUERY_EXECUTION_ERROR',
+          errorMessage: outcome.error.error,
+          startedAt: qStartedAt,
+          completedAt: qCompletedAt,
+          videos: [],
+        })
+        .catch(() => {});
     }
-  }
+    return outcome;
+  });
 
   const totalResults = results.reduce((acc, r) => acc + r.count, 0);
+  const finalStatus: 'completed' | 'partial' | 'failed' =
+    errors.length === 0 ? 'completed' : results.length > 0 ? 'partial' : 'failed';
+  const completedAt = new Date().toISOString();
+
+  firestoreService
+    .updateSearchRunSummary(req.idToken!, uid, runId, {
+      status: finalStatus,
+      successfulQueries: results.length,
+      failedQueries: errors.length,
+      totalResults,
+      completedAt,
+    })
+    .catch(() => {});
 
   const outputObj = {
-    generated_at: new Date().toISOString(),
+    generated_at: completedAt,
     summary: {
       queries: queries.length,
       successful: results.length,
@@ -963,6 +1218,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
   });
 
   res.json({
+    runId,
     outputYaml,
     data: outputObj,
   });

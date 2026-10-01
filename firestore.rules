@@ -7,6 +7,26 @@ service cloud.firestore {
       match /integrations/{integrationId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      match /querySets/{querySetId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /searchRuns/{runId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+
+        match /queryResults/{queryResultId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+
+          match /videos/{videoId} {
+            allow read, write: if request.auth != null && request.auth.uid == userId;
+          }
+        }
+      }
+
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
   }
 }

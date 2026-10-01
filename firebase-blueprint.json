@@ -5,86 +5,119 @@
       "description": "User profile for authenticated Google users",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Firebase user UID"
-        },
-        "email": {
-          "type": "string",
-          "description": "Google account email address"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "User's display name"
-        },
-        "photoURL": {
-          "type": "string",
-          "description": "User's profile photo URL"
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the user first logged in"
-        },
-        "lastLoginAt": {
-          "type": "string",
-          "description": "Timestamp of the most recent login"
-        }
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" }
       },
       "required": ["id", "email"]
     },
     "YouTubeIntegration": {
       "title": "YouTubeIntegration",
-      "description": "Per-user encrypted YouTube Data API key secret document (server-only access)",
+      "description": "Per-user encrypted YouTube Data API key secret document",
       "type": "object",
       "properties": {
-        "encryptedApiKey": {
-          "type": "string",
-          "description": "AES-256-GCM ciphertext encoded in base64"
-        },
-        "iv": {
-          "type": "string",
-          "description": "AES-256-GCM initialization vector encoded in base64"
-        },
-        "authTag": {
-          "type": "string",
-          "description": "AES-256-GCM authentication tag encoded in base64"
-        },
-        "keyVersion": {
-          "type": "number",
-          "description": "Version of the encryption key"
-        },
-        "keySuffix": {
-          "type": "string",
-          "description": "Last 4 characters of the API key for user display"
-        },
-        "verifiedAt": {
-          "type": "string",
-          "description": "ISO timestamp when the API key was verified against YouTube Data API v3"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "ISO timestamp when the integration was updated"
-        }
+        "encryptedApiKey": { "type": "string" },
+        "iv": { "type": "string" },
+        "authTag": { "type": "string" },
+        "keyVersion": { "type": "number" },
+        "keySuffix": { "type": "string" },
+        "verifiedAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
-      "required": [
-        "encryptedApiKey",
-        "iv",
-        "authTag",
-        "keyVersion",
-        "keySuffix",
-        "verifiedAt",
-        "updatedAt"
-      ]
+      "required": ["encryptedApiKey", "iv", "authTag", "keyVersion", "keySuffix", "verifiedAt", "updatedAt"]
+    },
+    "QuerySet": {
+      "title": "QuerySet",
+      "description": "Saved YAML query definitions created and maintained by the user",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "rawYaml": { "type": "string" },
+        "queryCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "rawYaml", "queryCount", "createdAt", "updatedAt"]
+    },
+    "SearchRun": {
+      "title": "SearchRun",
+      "description": "Immutable historical search run metadata and executed YAML snapshot",
+      "type": "object",
+      "properties": {
+        "querySetId": { "type": ["string", "null"] },
+        "querySetName": { "type": ["string", "null"] },
+        "status": { "type": "string", "enum": ["running", "completed", "partial", "failed"] },
+        "queryCount": { "type": "number" },
+        "successfulQueries": { "type": "number" },
+        "failedQueries": { "type": "number" },
+        "totalResults": { "type": "number" },
+        "inputYaml": { "type": "string" },
+        "startedAt": { "type": "string" },
+        "completedAt": { "type": ["string", "null"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["status", "queryCount", "inputYaml", "startedAt", "createdAt"]
+    },
+    "QueryResult": {
+      "title": "QueryResult",
+      "description": "Per-query outcome within a search run",
+      "type": "object",
+      "properties": {
+        "sourceQueryId": { "type": "string" },
+        "query": { "type": "string" },
+        "relevanceLanguage": { "type": ["string", "null"] },
+        "regionCode": { "type": ["string", "null"] },
+        "status": { "type": "string", "enum": ["success", "failed"] },
+        "resultCount": { "type": "number" },
+        "errorCode": { "type": ["string", "null"] },
+        "errorMessage": { "type": ["string", "null"] },
+        "startedAt": { "type": "string" },
+        "completedAt": { "type": "string" }
+      },
+      "required": ["sourceQueryId", "query", "status", "resultCount"]
+    },
+    "Video": {
+      "title": "Video",
+      "description": "Individual YouTube video record returned from a query",
+      "type": "object",
+      "properties": {
+        "videoId": { "type": "string" },
+        "title": { "type": "string" },
+        "channelId": { "type": "string" },
+        "channelTitle": { "type": "string" },
+        "publishedAt": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string" },
+        "thumbnailUrl": { "type": "string" }
+      },
+      "required": ["videoId", "title", "channelId", "channelTitle", "url"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "Stores user profile data, readable and writable only by the account owner."
+      "description": "Stores user profile"
     },
     "/users/{userId}/integrations/youtube": {
       "schema": "YouTubeIntegration",
-      "description": "Stores per-user encrypted YouTube Data API key, accessible only via server-side Admin SDK."
+      "description": "Stores encrypted YouTube API key"
+    },
+    "/users/{userId}/querySets/{querySetId}": {
+      "schema": "QuerySet",
+      "description": "User saved YAML query sets"
+    },
+    "/users/{userId}/searchRuns/{runId}": {
+      "schema": "SearchRun",
+      "description": "Historical search runs"
+    },
+    "/users/{userId}/searchRuns/{runId}/queryResults/{queryResultId}": {
+      "schema": "QueryResult",
+      "description": "Query execution results"
+    },
+    "/users/{userId}/searchRuns/{runId}/queryResults/{queryResultId}/videos/{videoId}": {
+      "schema": "Video",
+      "description": "Videos found for a query"
     }
   }
 }
