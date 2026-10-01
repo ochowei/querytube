@@ -2,13 +2,15 @@ openapi: 3.1.0
 info:
   title: QueryTube Public API
   version: 1.0.0
-  description: Public read-only API for accessing QueryTube query sets and historical YouTube search results explicitly shared by their owners.
+  description: Public read-only API for accessing QueryTube query sets and historical YouTube search results explicitly shared by their owners. Search Run public visibility is independent from Query Set visibility.
 servers:
   - url: /
     description: Current host server
 paths:
   /api/public/users/{userId}/query-sets:
     get:
+      tags:
+        - Query Sets
       summary: List public Query Sets
       description: Returns a list of query set summaries for the specified user that have been explicitly enabled for public read access. Does not include raw YAML definitions.
       operationId: listPublicQuerySets
@@ -62,6 +64,8 @@ paths:
 
   /api/public/users/{userId}/query-sets/{querySetId}:
     get:
+      tags:
+        - Query Sets
       summary: Get public Query Set details
       description: Returns the full public Query Set, including its raw YAML specification, if the owner has enabled Public API access.
       operationId: getPublicQuerySet
@@ -122,26 +126,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/public/users/{userId}/query-sets/{querySetId}/search-runs:
+  /api/public/users/{userId}/search-runs:
     get:
-      summary: List search runs for a public Query Set
-      description: Returns lightweight execution run summaries for the specified public Query Set, ordered newest first. Does not return heavy YAML or video lists.
+      tags:
+        - Search Runs
+      summary: List public Search Runs
+      description: Returns lightweight execution run summaries for the specified user that have been explicitly marked public by their owner, ordered newest first. Search Run public visibility is independent from Query Set visibility. Does not return heavy YAML or video lists. If querySetId filter is provided, only public search runs originating from that query set are returned.
       operationId: listPublicSearchRuns
       parameters:
         - name: userId
           in: path
           required: true
-          description: The Firebase UID of the query set owner.
+          description: The Firebase UID of the resource owner.
           schema:
             type: string
           example: cabeceowei-uid-123
-        - name: querySetId
-          in: path
-          required: true
-          description: The unique identifier of the Query Set.
-          schema:
-            type: string
-          example: qs_1711892019_abc12
         - name: limit
           in: query
           required: false
@@ -151,10 +150,17 @@ paths:
             default: 50
             minimum: 1
             maximum: 100
-          example: 20
+          example: 50
+        - name: querySetId
+          in: query
+          required: false
+          description: Optional filter to restrict results to search runs originating from a specific Query Set.
+          schema:
+            type: string
+          example: qs_1711892019_abc12
       responses:
         '200':
-          description: Successfully retrieved list of search runs.
+          description: Successfully retrieved list of public search runs.
           content:
             application/json:
               schema:
@@ -179,14 +185,9 @@ paths:
                     startedAt: '2026-10-01T02:10:00.000Z'
                     completedAt: '2026-10-01T02:10:15.000Z'
                     createdAt: '2026-10-01T02:10:00.000Z'
+                    visibility: public
         '400':
           description: Invalid request parameters.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Query Set not found or not marked as public.
           content:
             application/json:
               schema:
@@ -206,14 +207,16 @@ paths:
 
   /api/public/users/{userId}/search-runs/{runId}:
     get:
+      tags:
+        - Search Runs
       summary: Get public search run details
-      description: Returns the full details of a historical search run, including individual query results and normalized video items, provided the associated Query Set is currently public.
+      description: Returns the full details of a search run, including executed input YAML, query results, and normalized video items, provided the Search Run itself has been explicitly marked public by its owner. Search Run public visibility is independent from Query Set visibility.
       operationId: getPublicSearchRunDetails
       parameters:
         - name: userId
           in: path
           required: true
-          description: The Firebase UID of the query set owner.
+          description: The Firebase UID of the resource owner.
           schema:
             type: string
           example: cabeceowei-uid-123
@@ -226,7 +229,7 @@ paths:
           example: run_1711893000_xyz78
       responses:
         '200':
-          description: Successfully retrieved search run details.
+          description: Successfully retrieved public search run details.
           content:
             application/json:
               schema:
@@ -244,6 +247,7 @@ paths:
                 startedAt: '2026-10-01T02:10:00.000Z'
                 completedAt: '2026-10-01T02:10:15.000Z'
                 createdAt: '2026-10-01T02:10:00.000Z'
+                visibility: public
                 queryResults:
                   - id: ja-review
                     sourceQueryId: ja-review
@@ -272,7 +276,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
-          description: Search run not found, has no associated query set, or the parent query set is not public.
+          description: Search run not found or not marked as public.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Not Found
+                message: Search run not found or not public
+        '429':
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/public/users/{userId}/query-sets/{querySetId}/search-runs:
+    get:
+      tags:
+        - Search Runs
+      summary: List search runs for a query set (convenience endpoint)
+      description: Backward-compatible convenience endpoint equivalent to GET /api/public/users/{userId}/search-runs?querySetId={querySetId}. Returns public search runs originated from this query set.
+      operationId: listPublicSearchRunsByQuerySet
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The Firebase UID of the query set owner.
+          schema:
+            type: string
+          example: cabeceowei-uid-123
+        - name: querySetId
+          in: path
+          required: true
+          description: The unique identifier of the Query Set.
+          schema:
+            type: string
+          example: qs_1711892019_abc12
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of search runs to return (1-100, default 50).
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+          example: 50
+      responses:
+        '200':
+          description: Successfully retrieved list of search runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicSearchRunSummary'
+        '400':
+          description: Invalid request parameters.
           content:
             application/json:
               schema:
@@ -354,7 +426,6 @@ components:
       type: object
       required:
         - id
-        - querySetId
         - status
         - queryCount
         - successfulQueries
@@ -362,13 +433,15 @@ components:
         - totalResults
         - startedAt
         - createdAt
+        - visibility
       properties:
         id:
           type: string
           description: Unique identifier of the search run.
         querySetId:
           type: string
-          description: Identifier of the parent public Query Set.
+          nullable: true
+          description: Identifier of the source Query Set if originated from one.
         querySetName:
           type: string
           nullable: true
@@ -402,12 +475,16 @@ components:
           type: string
           format: date-time
           description: ISO timestamp of search run document creation.
+        visibility:
+          type: string
+          enum: [public]
+          description: Public visibility status.
+          example: public
 
     PublicSearchRun:
       type: object
       required:
         - id
-        - querySetId
         - status
         - queryCount
         - successfulQueries
@@ -416,6 +493,7 @@ components:
         - inputYaml
         - startedAt
         - createdAt
+        - visibility
         - queryResults
       properties:
         id:
@@ -423,7 +501,8 @@ components:
           description: Unique identifier of the search run.
         querySetId:
           type: string
-          description: Identifier of the parent public Query Set.
+          nullable: true
+          description: Identifier of the source Query Set if originated from one.
         querySetName:
           type: string
           nullable: true
@@ -460,6 +539,11 @@ components:
           type: string
           format: date-time
           description: ISO timestamp of search run document creation.
+        visibility:
+          type: string
+          enum: [public]
+          description: Public visibility status.
+          example: public
         queryResults:
           type: array
           description: Individual query results and videos.

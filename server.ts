@@ -878,6 +878,25 @@ app.get('/api/search-runs/:id', requireAuth, async (req: Request, res: Response)
   }
 });
 
+// PATCH /api/search-runs/:id/visibility - Toggle/update search run public/private visibility
+app.patch('/api/search-runs/:id/visibility', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { visibility } = req.body || {};
+    if (visibility !== 'public' && visibility !== 'private') {
+      return res.status(400).json({ error: 'visibility must be either "public" or "private"' });
+    }
+    const updated = await firestoreService.updateSearchRunVisibility(
+      req.idToken!,
+      req.user!.uid,
+      req.params.id,
+      visibility
+    );
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to update search run visibility' });
+  }
+});
+
 // DELETE /api/search-runs/:id - Recursively delete search run and its subcollections
 app.delete('/api/search-runs/:id', requireAuth, async (req: Request, res: Response) => {
   try {

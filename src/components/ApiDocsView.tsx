@@ -14,15 +14,19 @@ import {
 interface ApiDocsViewProps {
   userId?: string;
   querySetId?: string;
+  runId?: string;
+  targetOperationId?: string;
 }
 
 interface OpenApiParameter {
   name?: string;
   example?: unknown;
+  schema?: Record<string, unknown>;
 }
 
 interface OpenApiOperation {
   parameters?: OpenApiParameter[];
+  operationId?: string;
   [key: string]: unknown;
 }
 
@@ -37,6 +41,7 @@ const applyApiDocsContext = (
   source: OpenApiDocument,
   userId?: string,
   querySetId?: string,
+  runId?: string,
 ): OpenApiDocument => {
   // The fetched JSON is plain data, so a JSON clone also works in browsers
   // without structuredClone and keeps the server-provided document untouched.
@@ -46,8 +51,19 @@ const applyApiDocsContext = (
     parameters?.forEach((parameter) => {
       if (parameter.name === 'userId' && userId !== undefined) {
         parameter.example = userId;
+        if (parameter.schema && typeof parameter.schema === 'object') {
+          parameter.schema.default = userId;
+        }
       } else if (parameter.name === 'querySetId' && querySetId !== undefined) {
         parameter.example = querySetId;
+        if (parameter.schema && typeof parameter.schema === 'object') {
+          parameter.schema.default = querySetId;
+        }
+      } else if (parameter.name === 'runId' && runId !== undefined) {
+        parameter.example = runId;
+        if (parameter.schema && typeof parameter.schema === 'object') {
+          parameter.schema.default = runId;
+        }
       }
     });
   };
@@ -69,10 +85,15 @@ const getErrorMessage = (error: unknown): string => (
 );
 
 const formatContextValue = (value: string): string => (
-  value.length > 16 ? `${value.slice(0, 8)}...` : value
+  value.length > 20 ? `${value.slice(0, 10)}...` : value
 );
 
-export const ApiDocsView: React.FC<ApiDocsViewProps> = ({ userId, querySetId }) => {
+export const ApiDocsView: React.FC<ApiDocsViewProps> = ({
+  userId,
+  querySetId,
+  runId,
+  targetOperationId,
+}) => {
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedBase, setCopiedBase] = useState(false);
   const [swaggerKey, setSwaggerKey] = useState(0);
@@ -101,7 +122,7 @@ export const ApiDocsView: React.FC<ApiDocsViewProps> = ({ userId, querySetId }) 
         }
 
         const sourceSpec = await response.json() as OpenApiDocument;
-        const contextualSpec = applyApiDocsContext(sourceSpec, userId, querySetId);
+        const contextualSpec = applyApiDocsContext(sourceSpec, userId, querySetId, runId);
         if (!controller.signal.aborted) {
           setOpenApiSpec(contextualSpec);
         }
@@ -118,7 +139,31 @@ export const ApiDocsView: React.FC<ApiDocsViewProps> = ({ userId, querySetId }) 
 
     void loadSpec();
     return () => controller.abort();
-  }, [swaggerKey, userId, querySetId]);
+  }, [swaggerKey, userId, querySetId, runId]);
+
+  // Deep-link / scroll & expand target operation when specified
+  useEffect(() => {
+    if (!openApiSpec || !targetOperationId) return;
+
+    const timer = setTimeout(() => {
+      // Find element in Swagger UI DOM matching the target operation
+      const selector = `[id$="${targetOperationId}"], [data-operation-id="${targetOperationId}"]`;
+      const opElement = document.querySelector(selector) as HTMLElement | null;
+
+      if (opElement) {
+        // Expand the accordion if collapsed
+        const summaryBtn = opElement.querySelector('button.opblock-summary-control') as HTMLButtonElement | null;
+        if (summaryBtn && summaryBtn.getAttribute('aria-expanded') !== 'true') {
+          summaryBtn.click();
+        }
+
+        // Smooth scroll to the operation
+        opElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [openApiSpec, targetOperationId]);
 
   const copyToClipboard = (text: string, isJson: boolean) => {
     navigator.clipboard.writeText(text);
@@ -154,22 +199,32 @@ export const ApiDocsView: React.FC<ApiDocsViewProps> = ({ userId, querySetId }) 
               </span>
             </div>
             <p className="text-[11px] text-zinc-400 mt-0.5">
-              Read-only API for publicly shared Query Sets and historical search runs
+              Read-only API for publicly shared Query Sets and Search Runs (independent access)
             </p>
           </div>
         </div>
 
-        {(userId || querySetId) && (
-          <div className="mr-auto min-w-0 border-l border-zinc-800 pl-3 text-[10px] leading-4 text-zinc-400">
+        {(userId || querySetId || runId || targetOperationId) && (
+          <div className="mr-auto min-w-0 border-l border-zinc-800 pl-3 text-[10px] leading-4 text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
             <div className="font-semibold uppercase tracking-wide text-zinc-500">Context</div>
             {userId && (
               <div title={userId}>
-                User: <span className="font-mono text-zinc-300">{formatContextValue(userId)}</span>
+                User: <span className="font-mono text-zinc-300 font-semibold">{formatContextValue(userId)}</span>
               </div>
             )}
             {querySetId && (
               <div title={querySetId}>
                 Query Set: <span className="font-mono text-zinc-300">{formatContextValue(querySetId)}</span>
+              </div>
+            )}
+            {runId && (
+              <div title={runId}>
+                Run ID: <span className="font-mono text-emerald-400 font-semibold">{formatContextValue(runId)}</span>
+              </div>
+            )}
+            {targetOperationId && (
+              <div title={targetOperationId}>
+                Target: <span className="font-mono text-zinc-300">{targetOperationId}</span>
               </div>
             )}
           </div>
@@ -236,7 +291,11 @@ export const ApiDocsView: React.FC<ApiDocsViewProps> = ({ userId, querySetId }) 
             <p className="mt-1 text-xs">{specLoadError}</p>
           </div>
         ) : openApiSpec ? (
-          <SwaggerUI key={`${swaggerKey}-${userId ?? ''}-${querySetId ?? ''}`} spec={openApiSpec} />
+          <SwaggerUI
+            key={`${swaggerKey}-${userId ?? ''}-${querySetId ?? ''}-${runId ?? ''}-${targetOperationId ?? ''}`}
+            spec={openApiSpec}
+            deepLinking={true}
+          />
         ) : null}
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { QuerySet } from '../types';
+import { QuerySet, ApiDocsNavigationContext } from '../types';
 import {
   FolderCode,
   Plus,
@@ -28,7 +28,7 @@ interface QueriesViewProps {
   onRenameQuerySet: (id: string, newName: string) => Promise<void>;
   onDeleteQuerySet: (id: string) => Promise<void>;
   onTogglePublicApi?: (id: string, enabled: boolean) => Promise<void>;
-  onNavigateToDocs?: (querySetId: string) => void;
+  onNavigateToDocs?: (context: ApiDocsNavigationContext) => void;
   currentUserId?: string | null;
 }
 
@@ -135,6 +135,19 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
               className="w-full pl-9 pr-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-red-500/80 transition-colors"
             />
           </div>
+
+          {/* Public API Header Button */}
+          {currentUserId && onNavigateToDocs && (
+            <button
+              type="button"
+              onClick={() => onNavigateToDocs({ userId: currentUserId, targetOperationId: 'listPublicQuerySets' })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-300 hover:text-white text-xs font-medium transition-colors cursor-pointer flex-shrink-0"
+              title="Open Public Query Sets API in Swagger documentation"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-red-500" />
+              <span>Public API</span>
+            </button>
+          )}
 
           {/* New Query Set Button */}
           <button
@@ -332,7 +345,11 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
                           {onNavigateToDocs && (
                             <button
                               type="button"
-                              onClick={() => onNavigateToDocs(qs.id)}
+                              onClick={() => onNavigateToDocs({
+                                userId: currentUserId,
+                                querySetId: qs.id,
+                                targetOperationId: 'getPublicQuerySet',
+                              })}
                               className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[10px] cursor-pointer flex items-center gap-1"
                               title="Open Swagger API Docs in SPA"
                             >

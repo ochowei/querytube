@@ -43,7 +43,7 @@
     },
     "SearchRun": {
       "title": "SearchRun",
-      "description": "Immutable historical search run metadata and executed YAML snapshot",
+      "description": "Historical search run metadata and executed YAML snapshot",
       "type": "object",
       "properties": {
         "querySetId": { "type": ["string", "null"] },
@@ -56,7 +56,8 @@
         "inputYaml": { "type": "string" },
         "startedAt": { "type": "string" },
         "completedAt": { "type": ["string", "null"] },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["private", "public"] }
       },
       "required": ["status", "queryCount", "inputYaml", "startedAt", "createdAt"]
     },

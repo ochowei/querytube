@@ -79,26 +79,25 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
   });
 
   /**
-   * GET /api/public/users/:userId/query-sets/:querySetId/search-runs
-   * List search runs for a public Query Set
+   * GET /api/public/users/:userId/search-runs
+   * List public search runs for a user (optionally filtered by querySetId)
+   * Independent from Query Set visibility
    */
-  router.get('/users/:userId/query-sets/:querySetId/search-runs', async (req: Request, res: Response) => {
-    const { userId, querySetId } = req.params;
-    if (!userId || !querySetId) {
-      res.status(400).json({ error: 'Bad Request', message: 'Missing required parameters' });
+  router.get('/users/:userId/search-runs', async (req: Request, res: Response) => {
+    const { userId } = req.params;
+    if (!userId || typeof userId !== 'string') {
+      res.status(400).json({ error: 'Bad Request', message: 'Invalid userId parameter' });
       return;
     }
 
     const limitQuery = req.query.limit ? parseInt(String(req.query.limit), 10) : 50;
     const limit = isNaN(limitQuery) ? 50 : Math.max(1, Math.min(100, limitQuery));
+    const querySetId = typeof req.query.querySetId === 'string' && req.query.querySetId.trim()
+      ? req.query.querySetId.trim()
+      : undefined;
 
     try {
       const runs = await firestoreService.getPublicSearchRuns(userId, querySetId, limit);
-      if (runs === null) {
-        res.status(404).json({ error: 'Not Found', message: 'Query set not found or not public' });
-        return;
-      }
-
       res.json({ items: runs });
     } catch (err: any) {
       res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve search runs' });
@@ -107,7 +106,8 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
 
   /**
    * GET /api/public/users/:userId/search-runs/:runId
-   * Get search run details for a public Query Set
+   * Get search run details for a public Search Run
+   * Independent from Query Set visibility
    */
   router.get('/users/:userId/search-runs/:runId', async (req: Request, res: Response) => {
     const { userId, runId } = req.params;
@@ -126,6 +126,28 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
       res.json(runDetails);
     } catch (err: any) {
       res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve search run details' });
+    }
+  });
+
+  /**
+   * GET /api/public/users/:userId/query-sets/:querySetId/search-runs
+   * Backward-compatible convenience endpoint equivalent to /api/public/users/:userId/search-runs?querySetId=:querySetId
+   */
+  router.get('/users/:userId/query-sets/:querySetId/search-runs', async (req: Request, res: Response) => {
+    const { userId, querySetId } = req.params;
+    if (!userId || !querySetId) {
+      res.status(400).json({ error: 'Bad Request', message: 'Missing required parameters' });
+      return;
+    }
+
+    const limitQuery = req.query.limit ? parseInt(String(req.query.limit), 10) : 50;
+    const limit = isNaN(limitQuery) ? 50 : Math.max(1, Math.min(100, limitQuery));
+
+    try {
+      const runs = await firestoreService.getPublicSearchRuns(userId, querySetId, limit);
+      res.json({ items: runs });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve search runs' });
     }
   });
 

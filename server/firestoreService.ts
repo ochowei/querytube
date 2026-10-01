@@ -10,6 +10,7 @@ import {
   PublicQuerySet,
   PublicSearchRunSummary,
   PublicSearchRun,
+  ResourceVisibility,
 } from '../src/types/index.js';
 
 interface FirestoreFieldString {
@@ -284,6 +285,7 @@ export class FirestoreService {
       }
 
       const rawRun = runSnap.data()!;
+      const visibility: ResourceVisibility = rawRun.visibility === 'public' ? 'public' : 'private';
       const run: SearchRun = {
         id: runId,
         querySetId: rawRun.querySetId || null,
@@ -297,6 +299,7 @@ export class FirestoreService {
         startedAt: rawRun.startedAt || (runSnap.createTime ? runSnap.createTime.toDate().toISOString() : new Date().toISOString()),
         completedAt: rawRun.completedAt || null,
         createdAt: rawRun.createdAt || (runSnap.createTime ? runSnap.createTime.toDate().toISOString() : new Date().toISOString()),
+        visibility,
       };
 
       const qSnap = await runDocRef.collection('queryResults').get();
@@ -481,16 +484,10 @@ export class FirestoreService {
     };
   }
 
-  async getPublicSearchRuns(uid: string, querySetId: string, limitCount = 50): Promise<PublicSearchRunSummary[] | null> {
-    // 1. First ensure the QuerySet exists, belongs to this user, and is public
-    const qs = await this.getPublicQuerySet(uid, querySetId);
-    if (!qs) {
-      return null;
-    }
-
+  async getPublicSearchRuns(uid: string, querySetId?: string | null, limitCount = 50): Promise<PublicSearchRunSummary[]> {
     const userRuns = getOrCreateUserMap(inMemorySearchRuns, uid);
 
-    // 2. Fetch runs associated with this QuerySet from Firestore
+    // 1. Fetch runs from Firestore via Firebase Admin SDK
     if (this.adminDb) {
       try {
         const runsSnap = await this.adminDb
@@ -501,6 +498,7 @@ export class FirestoreService {
 
         for (const doc of runsSnap.docs) {
           const raw = doc.data();
+          const visibility: ResourceVisibility = raw.visibility === 'public' ? 'public' : 'private';
           const item: SearchRun = {
             id: doc.id,
             querySetId: raw.querySetId || null,
@@ -514,6 +512,7 @@ export class FirestoreService {
             startedAt: raw.startedAt || (doc.createTime ? doc.createTime.toDate().toISOString() : new Date().toISOString()),
             completedAt: raw.completedAt || null,
             createdAt: raw.createdAt || (doc.createTime ? doc.createTime.toDate().toISOString() : new Date().toISOString()),
+            visibility,
           };
           userRuns.set(doc.id, item);
         }
@@ -522,13 +521,21 @@ export class FirestoreService {
       }
     }
 
-    const matchedRuns = Array.from(userRuns.values()).filter((run) => run.querySetId === querySetId);
+    // 2. Filter strictly by Search Run's OWN visibility === 'public'
+    // Independent from Query Set visibility
+    let matchedRuns = Array.from(userRuns.values()).filter((run) => run.visibility === 'public');
+
+    // Optional filter by querySetId if provided
+    if (querySetId) {
+      matchedRuns = matchedRuns.filter((run) => run.querySetId === querySetId);
+    }
+
     const sorted = matchedRuns.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
     const cappedLimit = Math.max(1, Math.min(100, limitCount));
 
     return sorted.slice(0, cappedLimit).map((r) => ({
       id: r.id,
-      querySetId: r.querySetId || querySetId,
+      querySetId: r.querySetId ?? null,
       querySetName: r.querySetName ?? null,
       status: r.status,
       queryCount: r.queryCount,
@@ -538,6 +545,7 @@ export class FirestoreService {
       startedAt: r.startedAt,
       completedAt: r.completedAt ?? null,
       createdAt: r.createdAt,
+      visibility: 'public',
     }));
   }
 
@@ -546,7 +554,7 @@ export class FirestoreService {
 
     // 1. Authoritative fetch from Firestore if missing or incomplete
     let details = userDetails.get(runId);
-    if (!details || !details.queryResults || details.queryResults.length === 0) {
+    if (!details || !details.queryResults || details.queryResults.length === 0 || !details.visibility) {
       if (this.adminDb) {
         try {
           const loaded = await this.loadSearchRunDetailsFromFirestore(uid, runId);
@@ -560,20 +568,16 @@ export class FirestoreService {
       }
     }
 
-    if (!details || !details.querySetId) {
-      return null;
-    }
-
-    // 2. CRITICAL: Verify parent QuerySet belongs to same user and is public
-    const qs = await this.getPublicQuerySet(uid, details.querySetId);
-    if (!qs) {
+    // 2. CRITICAL: Search Run must exist and have visibility === 'public'
+    // Do NOT require Query Set to exist or be public!
+    if (!details || details.visibility !== 'public') {
       return null;
     }
 
     // 3. Construct safe public search run DTO
     return {
       id: details.id,
-      querySetId: details.querySetId,
+      querySetId: details.querySetId ?? null,
       querySetName: details.querySetName ?? null,
       status: details.status,
       queryCount: details.queryCount,
@@ -584,6 +588,7 @@ export class FirestoreService {
       startedAt: details.startedAt,
       completedAt: details.completedAt ?? null,
       createdAt: details.createdAt,
+      visibility: 'public',
       queryResults: (details.queryResults || []).map((q) => ({
         id: q.id,
         sourceQueryId: q.sourceQueryId,
@@ -635,10 +640,12 @@ export class FirestoreService {
       querySetName?: string | null;
       queryCount: number;
       inputYaml: string;
+      visibility?: ResourceVisibility;
     }
   ): Promise<string> {
     const runId = `run_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
+    const visibility: ResourceVisibility = data.visibility === 'public' ? 'public' : 'private';
 
     const payload: SearchRun = {
       id: runId,
@@ -653,6 +660,7 @@ export class FirestoreService {
       startedAt: now,
       completedAt: null,
       createdAt: now,
+      visibility,
     };
 
     const userRuns = getOrCreateUserMap(inMemorySearchRuns, uid);
@@ -685,6 +693,67 @@ export class FirestoreService {
     }
 
     return runId;
+  }
+
+  async updateSearchRunVisibility(
+    idToken: string,
+    uid: string,
+    runId: string,
+    visibility: ResourceVisibility
+  ): Promise<SearchRun> {
+    const userRuns = getOrCreateUserMap(inMemorySearchRuns, uid);
+    const existing = userRuns.get(runId);
+    if (existing) {
+      existing.visibility = visibility;
+    }
+
+    const userDetails = getOrCreateUserMap(inMemoryRunDetails, uid);
+    const existingDetails = userDetails.get(runId);
+    if (existingDetails) {
+      existingDetails.visibility = visibility;
+    }
+
+    try {
+      const url = `${this.baseUrl}/users/${uid}/searchRuns/${encodeURIComponent(runId)}?updateMask.fieldPaths=visibility`;
+      await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          fields: {
+            visibility: { stringValue: visibility },
+          },
+        }),
+      });
+    } catch (e) {
+      console.warn('[Firestore] updateSearchRunVisibility notice:', e);
+    }
+
+    if (existing) {
+      return existing;
+    }
+
+    const loaded = await this.getSearchRunDetails(idToken, uid, runId);
+    if (loaded) {
+      loaded.visibility = visibility;
+      return loaded;
+    }
+
+    return {
+      id: runId,
+      status: 'completed',
+      queryCount: 0,
+      successfulQueries: 0,
+      failedQueries: 0,
+      totalResults: 0,
+      inputYaml: '',
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      createdAt: new Date().toISOString(),
+      visibility,
+    };
   }
 
   async updateSearchRunSummary(
@@ -888,6 +957,7 @@ export class FirestoreService {
         for (const doc of docs) {
           const id = doc.name.split('/').pop() || '';
           const raw = fromFirestoreFields(doc.fields);
+          const visibility: ResourceVisibility = raw.visibility === 'public' ? 'public' : 'private';
           const item: SearchRun = {
             id,
             querySetId: raw.querySetId || null,
@@ -901,6 +971,7 @@ export class FirestoreService {
             startedAt: raw.startedAt || doc.createTime,
             completedAt: raw.completedAt || null,
             createdAt: raw.createdAt || doc.createTime,
+            visibility,
           };
           userMemory.set(id, item);
         }
@@ -936,6 +1007,7 @@ export class FirestoreService {
 
       const runDoc = (await runRes.json()) as any;
       const rawRun = fromFirestoreFields(runDoc.fields);
+      const visibility: ResourceVisibility = rawRun.visibility === 'public' ? 'public' : 'private';
 
       const run: SearchRun = {
         id: runId,
@@ -950,6 +1022,7 @@ export class FirestoreService {
         startedAt: rawRun.startedAt || runDoc.createTime,
         completedAt: rawRun.completedAt || null,
         createdAt: rawRun.createdAt || runDoc.createTime,
+        visibility,
       };
 
       // 2. Fetch all queryResults subcollection

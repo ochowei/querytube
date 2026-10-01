@@ -16,7 +16,7 @@ import { ApiDocsView } from './components/ApiDocsView';
 import { SaveQuerySetModal } from './components/SaveQuerySetModal';
 import { useAuth } from './context/AuthContext';
 import { validateYamlString, SAMPLE_YAMLS, ValidationResult } from './utils/yamlValidator';
-import { QuerySet, SearchRun, SearchRunDetails } from './types';
+import { QuerySet, SearchRun, SearchRunDetails, ApiDocsNavigationContext, ResourceVisibility } from './types';
 import { AlertCircle, X, Terminal, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -24,16 +24,21 @@ export default function App() {
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<AppTab>('search');
-  const [apiDocsContext, setApiDocsContext] = useState<{
-    userId?: string;
-    querySetId?: string;
-  }>({});
+  const [apiDocsContext, setApiDocsContext] = useState<ApiDocsNavigationContext>({});
 
   const handleTabChange = (tab: AppTab) => {
     if (tab === 'docs') {
       setApiDocsContext({});
     }
     setActiveTab(tab);
+  };
+
+  const handleNavigateToDocs = (context: ApiDocsNavigationContext) => {
+    setApiDocsContext({
+      userId: user?.uid,
+      ...context,
+    });
+    setActiveTab('docs');
   };
 
   // YAML editor & execution state
@@ -452,6 +457,34 @@ export default function App() {
     } catch (err: any) {
       setGlobalError(err.message || 'Failed to delete search run.');
     }
+  };
+
+  const handleToggleSearchRunVisibility = async (runId: string, visibility: ResourceVisibility) => {
+    const token = await getIdToken();
+    if (!token) throw new Error('Session expired. Please sign in again.');
+
+    const res = await fetch(`/api/search-runs/${runId}/visibility`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ visibility }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update visibility.');
+    }
+
+    const updated: SearchRun = await res.json();
+    setSearchRuns((prev) => prev.map((r) => (r.id === runId ? { ...r, visibility: updated.visibility } : r)));
+    setSuccessNotice(
+      visibility === 'public'
+        ? 'Search run marked as Public. Public API is now accessible.'
+        : 'Search run marked as Private. Public API access is disabled.'
+    );
+    setTimeout(() => setSuccessNotice(null), 3000);
   };
 
   const handleRunAgain = (
@@ -914,10 +947,7 @@ export default function App() {
             onRenameQuerySet={handleRenameQuerySet}
             onDeleteQuerySet={handleDeleteQuerySet}
             onTogglePublicApi={handleTogglePublicApi}
-            onNavigateToDocs={(querySetId) => {
-              setApiDocsContext({ userId: user?.uid, querySetId });
-              setActiveTab('docs');
-            }}
+            onNavigateToDocs={handleNavigateToDocs}
             currentUserId={user?.uid}
           />
         )}
@@ -931,6 +961,9 @@ export default function App() {
             onLoadRunDetails={handleLoadRunDetails}
             onRunAgain={handleRunAgain}
             onDeleteRun={handleDeleteRun}
+            onToggleVisibility={handleToggleSearchRunVisibility}
+            onNavigateToDocs={handleNavigateToDocs}
+            currentUserId={user?.uid}
           />
         )}
 
@@ -939,6 +972,8 @@ export default function App() {
           <ApiDocsView
             userId={apiDocsContext.userId}
             querySetId={apiDocsContext.querySetId}
+            runId={apiDocsContext.runId}
+            targetOperationId={apiDocsContext.targetOperationId}
           />
         )}
       </main>

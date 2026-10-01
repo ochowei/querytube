@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SearchRunDetails } from '../types';
+import { SearchRunDetails, ApiDocsNavigationContext, ResourceVisibility } from '../types';
 import {
   X,
   Copy,
@@ -17,6 +17,10 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
+  Globe,
+  Lock,
+  BookOpen,
+  Loader2,
 } from 'lucide-react';
 
 interface SearchRunDetailModalProps {
@@ -25,6 +29,9 @@ interface SearchRunDetailModalProps {
   onClose: () => void;
   onRunAgain: (inputYaml: string, querySetId?: string | null, querySetName?: string | null) => void;
   onDeleteRun: (runId: string) => Promise<void>;
+  onToggleVisibility?: (runId: string, visibility: ResourceVisibility) => Promise<void>;
+  onNavigateToDocs?: (context: ApiDocsNavigationContext) => void;
+  currentUserId?: string | null;
 }
 
 export const SearchRunDetailModal: React.FC<SearchRunDetailModalProps> = ({
@@ -33,14 +40,21 @@ export const SearchRunDetailModal: React.FC<SearchRunDetailModalProps> = ({
   onClose,
   onRunAgain,
   onDeleteRun,
+  onToggleVisibility,
+  onNavigateToDocs,
+  currentUserId,
 }) => {
   const [activeTab, setActiveTab] = useState<'results' | 'yaml' | 'input'>('results');
   const [copied, setCopied] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
   const [expandedQueries, setExpandedQueries] = useState<Record<string, boolean>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
 
   if (!isOpen || !run) return null;
+
+  const isPublic = run.visibility === 'public';
 
   const toggleQuery = (id: string) => {
     setExpandedQueries((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -71,6 +85,16 @@ export const SearchRunDetailModal: React.FC<SearchRunDetailModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleToggle = async () => {
+    if (!onToggleVisibility) return;
+    setIsTogglingVisibility(true);
+    try {
+      await onToggleVisibility(run.id, isPublic ? 'private' : 'public');
+    } finally {
+      setIsTogglingVisibility(false);
+    }
+  };
+
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
@@ -99,7 +123,7 @@ export const SearchRunDetailModal: React.FC<SearchRunDetailModalProps> = ({
         {/* Modal Header */}
         <div className="px-5 py-4 bg-zinc-950/80 border-b border-zinc-800 flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               <h2 className="text-base font-bold text-zinc-100">
                 {run.querySetName || 'Ad-hoc YAML Search Run'}
               </h2>
@@ -118,6 +142,19 @@ export const SearchRunDetailModal: React.FC<SearchRunDetailModalProps> = ({
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-400 bg-red-950/60 border border-red-800/50 px-2 py-0.5 rounded">
                   <XCircle className="w-3 h-3 text-red-400" />
                   Failed
+                </span>
+              )}
+
+              {/* Visibility Badge */}
+              {isPublic ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 px-2 py-0.5 rounded">
+                  <Globe className="w-2.5 h-2.5" />
+                  Public API Enabled
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium text-zinc-400 bg-zinc-800/70 border border-zinc-700/50 px-2 py-0.5 rounded">
+                  <Lock className="w-2.5 h-2.5 text-zinc-500" />
+                  Private
                 </span>
               )}
             </div>
@@ -193,7 +230,61 @@ export const SearchRunDetailModal: React.FC<SearchRunDetailModalProps> = ({
           </div>
 
           {/* Action Toolbar */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Visibility Toggle Switch */}
+            {onToggleVisibility && (
+              <div className="flex items-center gap-1.5 mr-2 pr-2 border-r border-zinc-800">
+                <span className="text-[11px] text-zinc-400">Visibility:</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isPublic}
+                  disabled={isTogglingVisibility}
+                  onClick={handleToggle}
+                  className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-1 focus:ring-red-500 disabled:opacity-50 ${
+                    isPublic ? 'bg-emerald-600' : 'bg-zinc-700'
+                  }`}
+                  title={isPublic ? 'Make Private' : 'Make Public'}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      isPublic ? 'translate-x-3.5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+                <span className={`text-[11px] font-mono font-medium ${isPublic ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                  {isTogglingVisibility ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-red-500" />
+                  ) : isPublic ? (
+                    'Public'
+                  ) : (
+                    'Private'
+                  )}
+                </span>
+              </div>
+            )}
+
+            {/* Public API Button (if public) */}
+            {isPublic && currentUserId && onNavigateToDocs && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onNavigateToDocs({
+                    userId: currentUserId,
+                    runId: run.id,
+                    targetOperationId: 'getPublicSearchRunDetails',
+                  });
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+                title="View in Swagger Public API Docs"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Public API</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleCopyYaml}

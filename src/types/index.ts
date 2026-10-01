@@ -1,3 +1,5 @@
+export type ResourceVisibility = 'private' | 'public';
+
 export interface QuerySet {
   id: string;
   name: string;
@@ -28,7 +30,7 @@ export interface PublicQuerySet {
 
 export interface PublicSearchRunSummary {
   id: string;
-  querySetId: string;
+  querySetId?: string | null;
   querySetName: string | null;
   status: SearchRunStatus;
   queryCount: number;
@@ -38,11 +40,12 @@ export interface PublicSearchRunSummary {
   startedAt: string;
   completedAt: string | null;
   createdAt: string;
+  visibility: ResourceVisibility;
 }
 
 export interface PublicSearchRun {
   id: string;
-  querySetId: string;
+  querySetId?: string | null;
   querySetName: string | null;
   status: SearchRunStatus;
   queryCount: number;
@@ -53,6 +56,7 @@ export interface PublicSearchRun {
   startedAt: string;
   completedAt: string | null;
   createdAt: string;
+  visibility: ResourceVisibility;
   queryResults: QueryResultItem[];
 }
 
@@ -71,6 +75,7 @@ export interface SearchRun {
   startedAt: string;
   completedAt?: string | null;
   createdAt: string;
+  visibility: ResourceVisibility;
 }
 
 export interface StoredVideoItem {
@@ -102,4 +107,11 @@ export interface QueryResultItem {
 export interface SearchRunDetails extends SearchRun {
   queryResults: QueryResultItem[];
   outputYaml: string;
+}
+
+export interface ApiDocsNavigationContext {
+  userId?: string;
+  querySetId?: string;
+  runId?: string;
+  targetOperationId?: string;
 }
