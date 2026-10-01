@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin for server-side ID token verification and Firestore
-let firebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'fiery-splice-321104';
+let firebaseProjectId = process.env.FIREBASE_PROJECT_ID || 'sapient-spark-z83d0';
 let firestoreDatabaseId: string | undefined;
 
 try {
@@ -1256,8 +1256,8 @@ async function setupServer() {
     });
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`Server listening on port ${PORT} (0.0.0.0)`);
   });
 }
 
