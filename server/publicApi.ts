@@ -39,7 +39,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
    * GET /api/public/users/:userId/query-sets
    * List public Query Sets for a specific user
    */
-  router.get('/users/:userId/query-sets', (req: Request, res: Response) => {
+  router.get('/users/:userId/query-sets', async (req: Request, res: Response) => {
     const { userId } = req.params;
     if (!userId || typeof userId !== 'string') {
       res.status(400).json({ error: 'Bad Request', message: 'Invalid userId parameter' });
@@ -47,7 +47,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
     }
 
     try {
-      const items = firestoreService.getPublicQuerySets(userId);
+      const items = await firestoreService.getPublicQuerySets(userId);
       res.json({ items });
     } catch (err: any) {
       res.status(500).json({ error: 'Internal Server Error', message: 'Failed to retrieve query sets' });
@@ -58,7 +58,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
    * GET /api/public/users/:userId/query-sets/:querySetId
    * Get single public Query Set
    */
-  router.get('/users/:userId/query-sets/:querySetId', (req: Request, res: Response) => {
+  router.get('/users/:userId/query-sets/:querySetId', async (req: Request, res: Response) => {
     const { userId, querySetId } = req.params;
     if (!userId || !querySetId) {
       res.status(400).json({ error: 'Bad Request', message: 'Missing required parameters' });
@@ -66,7 +66,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
     }
 
     try {
-      const querySet = firestoreService.getPublicQuerySet(userId, querySetId);
+      const querySet = await firestoreService.getPublicQuerySet(userId, querySetId);
       if (!querySet) {
         res.status(404).json({ error: 'Not Found', message: 'Query set not found or not public' });
         return;
@@ -82,7 +82,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
    * GET /api/public/users/:userId/query-sets/:querySetId/search-runs
    * List search runs for a public Query Set
    */
-  router.get('/users/:userId/query-sets/:querySetId/search-runs', (req: Request, res: Response) => {
+  router.get('/users/:userId/query-sets/:querySetId/search-runs', async (req: Request, res: Response) => {
     const { userId, querySetId } = req.params;
     if (!userId || !querySetId) {
       res.status(400).json({ error: 'Bad Request', message: 'Missing required parameters' });
@@ -93,7 +93,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
     const limit = isNaN(limitQuery) ? 50 : Math.max(1, Math.min(100, limitQuery));
 
     try {
-      const runs = firestoreService.getPublicSearchRuns(userId, querySetId, limit);
+      const runs = await firestoreService.getPublicSearchRuns(userId, querySetId, limit);
       if (runs === null) {
         res.status(404).json({ error: 'Not Found', message: 'Query set not found or not public' });
         return;
@@ -109,7 +109,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
    * GET /api/public/users/:userId/search-runs/:runId
    * Get search run details for a public Query Set
    */
-  router.get('/users/:userId/search-runs/:runId', (req: Request, res: Response) => {
+  router.get('/users/:userId/search-runs/:runId', async (req: Request, res: Response) => {
     const { userId, runId } = req.params;
     if (!userId || !runId) {
       res.status(400).json({ error: 'Bad Request', message: 'Missing required parameters' });
@@ -117,7 +117,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
     }
 
     try {
-      const runDetails = firestoreService.getPublicSearchRunDetails(userId, runId);
+      const runDetails = await firestoreService.getPublicSearchRunDetails(userId, runId);
       if (!runDetails) {
         res.status(404).json({ error: 'Not Found', message: 'Search run not found or not public' });
         return;

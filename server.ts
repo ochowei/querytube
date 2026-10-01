@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { load, dump } from 'js-yaml';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 import swaggerUi from 'swagger-ui-express';
 import { FirestoreService } from './server/firestoreService.js';
 import { createPublicApiRouter } from './server/publicApi.js';
@@ -38,10 +39,15 @@ try {
 
 const adminApp = getApps().length === 0 ? initializeApp({ projectId: firebaseProjectId }) : getApps()[0];
 const adminAuth = getAuth(adminApp);
+const adminDb = getFirestore(
+  adminApp,
+  firestoreDatabaseId || 'ai-studio-youtubeyamlsearc-83e4e646-42fd-44b9-a9a0-7af77ee13b93'
+);
 
 const firestoreService = new FirestoreService(
   firebaseProjectId,
-  firestoreDatabaseId || 'ai-studio-youtubeyamlsearc-83e4e646-42fd-44b9-a9a0-7af77ee13b93'
+  firestoreDatabaseId || 'ai-studio-youtubeyamlsearc-83e4e646-42fd-44b9-a9a0-7af77ee13b93',
+  adminDb
 );
 
 export interface AuthenticatedUser {
