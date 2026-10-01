@@ -306,15 +306,20 @@ export class FirestoreService {
     });
 
     try {
-      const url = `${this.baseUrl}/users/${uid}/searchRuns?documentId=${runId}`;
-      await fetch(url, {
-        method: 'POST',
+      const url = `${this.baseUrl}/users/${uid}/searchRuns/${encodeURIComponent(runId)}`;
+      const res = await fetch(url, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({ fields: toFirestoreFields(payload) }),
       });
+      if (!res.ok) {
+        console.warn('[Firestore] createSearchRun error:', res.status, await res.text());
+      } else {
+        console.log(`[Firestore] Created SearchRun document: ${runId}`);
+      }
     } catch (e) {
       console.warn('[Firestore] createSearchRun notice:', e);
     }
@@ -450,9 +455,9 @@ export class FirestoreService {
       });
     }
 
-    // 1. Save queryResult document to Firestore
+    // 1. Save queryResult document to Firestore via PATCH
     try {
-      const queryResultDocUrl = `${this.baseUrl}/users/${uid}/searchRuns/${encodeURIComponent(runId)}/queryResults?documentId=${safeResultId}`;
+      const queryResultDocUrl = `${this.baseUrl}/users/${uid}/searchRuns/${encodeURIComponent(runId)}/queryResults/${safeResultId}`;
       const queryResultPayload = {
         sourceQueryId: resultItem.sourceQueryId,
         query: resultItem.query,
@@ -466,8 +471,8 @@ export class FirestoreService {
         completedAt: resultItem.completedAt,
       };
 
-      await fetch(queryResultDocUrl, {
-        method: 'POST',
+      const qRes = await fetch(queryResultDocUrl, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
@@ -475,24 +480,34 @@ export class FirestoreService {
         body: JSON.stringify({ fields: toFirestoreFields(queryResultPayload) }),
       });
 
-      // 2. Save videos to Firestore subcollection
+      if (!qRes.ok) {
+        console.warn(`[Firestore] saveQueryResult error (${safeResultId}):`, qRes.status, await qRes.text());
+      } else {
+        console.log(`[Firestore] Saved queryResult ${safeResultId} for run ${runId}`);
+      }
+
+      // 2. Save videos to Firestore subcollection via PATCH
       if (resultItem.videos && resultItem.videos.length > 0) {
         for (const video of resultItem.videos) {
           const safeVideoId = encodeURIComponent(video.videoId || `vid_${Math.random().toString(36).substring(2)}`);
-          const videoDocUrl = `${this.baseUrl}/users/${uid}/searchRuns/${encodeURIComponent(runId)}/queryResults/${safeResultId}/videos?documentId=${safeVideoId}`;
+          const videoDocUrl = `${this.baseUrl}/users/${uid}/searchRuns/${encodeURIComponent(runId)}/queryResults/${safeResultId}/videos/${safeVideoId}`;
 
-          await fetch(videoDocUrl, {
-            method: 'POST',
+          const vRes = await fetch(videoDocUrl, {
+            method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${idToken}`,
             },
             body: JSON.stringify({ fields: toFirestoreFields(video) }),
-          }).catch(() => {});
+          });
+
+          if (!vRes.ok) {
+            console.warn(`[Firestore] saveVideo error (${safeVideoId}):`, vRes.status, await vRes.text());
+          }
         }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('[Firestore] saveQueryResultAndVideos error:', err);
     }
   }
 

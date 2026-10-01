@@ -993,6 +993,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
     const results: QuerySuccessResult[] = [];
     const errors: QueryErrorResult[] = [];
     let completedCount = 0;
+    const persistPromises: Promise<any>[] = [];
 
     await runWithConcurrency(queries, 3, async (query, index) => {
       res.write(
@@ -1013,29 +1014,31 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
       if (outcome.success && outcome.result) {
         results.push(outcome.result);
 
-        // Persist query result and video documents to Firestore subcollections asynchronously
-        firestoreService
-          .saveQueryResultAndVideos(req.idToken!, uid, runId, {
-            sourceQueryId: query.id,
-            query: query.q,
-            relevanceLanguage: query.relevance_language,
-            regionCode: query.region_code,
-            status: 'success',
-            resultCount: outcome.result.count,
-            startedAt: qStartedAt,
-            completedAt: qCompletedAt,
-            videos: outcome.result.videos.map((v) => ({
-              videoId: v.video_id,
-              title: v.title,
-              channelId: v.channel_id,
-              channelTitle: v.channel_title,
-              publishedAt: v.published_at,
-              description: v.description,
-              url: v.url,
-              thumbnailUrl: v.thumbnail_url,
-            })),
-          })
-          .catch((e) => console.warn('[Firestore saveQueryResult error]:', e));
+        // Persist query result and video documents to Firestore subcollections
+        persistPromises.push(
+          firestoreService
+            .saveQueryResultAndVideos(req.idToken!, uid, runId, {
+              sourceQueryId: query.id,
+              query: query.q,
+              relevanceLanguage: query.relevance_language,
+              regionCode: query.region_code,
+              status: 'success',
+              resultCount: outcome.result.count,
+              startedAt: qStartedAt,
+              completedAt: qCompletedAt,
+              videos: outcome.result.videos.map((v) => ({
+                videoId: v.video_id,
+                title: v.title,
+                channelId: v.channel_id,
+                channelTitle: v.channel_title,
+                publishedAt: v.published_at,
+                description: v.description,
+                url: v.url,
+                thumbnailUrl: v.thumbnail_url,
+              })),
+            })
+            .catch((e) => console.warn('[Firestore saveQueryResult error]:', e))
+        );
 
         res.write(
           `data: ${JSON.stringify({
@@ -1052,21 +1055,23 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
         errors.push(outcome.error);
 
         // Persist failed query result to Firestore
-        firestoreService
-          .saveQueryResultAndVideos(req.idToken!, uid, runId, {
-            sourceQueryId: query.id,
-            query: query.q,
-            relevanceLanguage: query.relevance_language,
-            regionCode: query.region_code,
-            status: 'failed',
-            resultCount: 0,
-            errorCode: 'QUERY_EXECUTION_ERROR',
-            errorMessage: outcome.error.error,
-            startedAt: qStartedAt,
-            completedAt: qCompletedAt,
-            videos: [],
-          })
-          .catch((e) => console.warn('[Firestore saveQueryResult error]:', e));
+        persistPromises.push(
+          firestoreService
+            .saveQueryResultAndVideos(req.idToken!, uid, runId, {
+              sourceQueryId: query.id,
+              query: query.q,
+              relevanceLanguage: query.relevance_language,
+              regionCode: query.region_code,
+              status: 'failed',
+              resultCount: 0,
+              errorCode: 'QUERY_EXECUTION_ERROR',
+              errorMessage: outcome.error.error,
+              startedAt: qStartedAt,
+              completedAt: qCompletedAt,
+              videos: [],
+            })
+            .catch((e) => console.warn('[Firestore saveQueryResult error]:', e))
+        );
 
         res.write(
           `data: ${JSON.stringify({
@@ -1081,13 +1086,16 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
       }
     });
 
+    // Ensure all subcollection queries and videos finish saving before ending stream
+    await Promise.all(persistPromises);
+
     const totalResults = results.reduce((acc, r) => acc + r.count, 0);
     const finalStatus: 'completed' | 'partial' | 'failed' =
       errors.length === 0 ? 'completed' : results.length > 0 ? 'partial' : 'failed';
 
-    // Update SearchRun document with final summary
+    // Update SearchRun document with final summary and await completion
     const completedAt = new Date().toISOString();
-    firestoreService
+    await firestoreService
       .updateSearchRunSummary(req.idToken!, uid, runId, {
         status: finalStatus,
         successfulQueries: results.length,
@@ -1132,6 +1140,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
   // Non-streaming standard endpoint
   const results: QuerySuccessResult[] = [];
   const errors: QueryErrorResult[] = [];
+  const persistPromises: Promise<any>[] = [];
 
   const outcomes = await runWithConcurrency(queries, 3, async (query) => {
     const qStartedAt = new Date().toISOString();
@@ -1140,55 +1149,62 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
 
     if (outcome.success && outcome.result) {
       results.push(outcome.result);
-      firestoreService
-        .saveQueryResultAndVideos(req.idToken!, uid, runId, {
-          sourceQueryId: query.id,
-          query: query.q,
-          relevanceLanguage: query.relevance_language,
-          regionCode: query.region_code,
-          status: 'success',
-          resultCount: outcome.result.count,
-          startedAt: qStartedAt,
-          completedAt: qCompletedAt,
-          videos: outcome.result.videos.map((v) => ({
-            videoId: v.video_id,
-            title: v.title,
-            channelId: v.channel_id,
-            channelTitle: v.channel_title,
-            publishedAt: v.published_at,
-            description: v.description,
-            url: v.url,
-            thumbnailUrl: v.thumbnail_url,
-          })),
-        })
-        .catch(() => {});
+      persistPromises.push(
+        firestoreService
+          .saveQueryResultAndVideos(req.idToken!, uid, runId, {
+            sourceQueryId: query.id,
+            query: query.q,
+            relevanceLanguage: query.relevance_language,
+            regionCode: query.region_code,
+            status: 'success',
+            resultCount: outcome.result.count,
+            startedAt: qStartedAt,
+            completedAt: qCompletedAt,
+            videos: outcome.result.videos.map((v) => ({
+              videoId: v.video_id,
+              title: v.title,
+              channelId: v.channel_id,
+              channelTitle: v.channel_title,
+              publishedAt: v.published_at,
+              description: v.description,
+              url: v.url,
+              thumbnailUrl: v.thumbnail_url,
+            })),
+          })
+          .catch((e) => console.warn('[Firestore saveQueryResult error]:', e))
+      );
     } else if (outcome.error) {
       errors.push(outcome.error);
-      firestoreService
-        .saveQueryResultAndVideos(req.idToken!, uid, runId, {
-          sourceQueryId: query.id,
-          query: query.q,
-          relevanceLanguage: query.relevance_language,
-          regionCode: query.region_code,
-          status: 'failed',
-          resultCount: 0,
-          errorCode: 'QUERY_EXECUTION_ERROR',
-          errorMessage: outcome.error.error,
-          startedAt: qStartedAt,
-          completedAt: qCompletedAt,
-          videos: [],
-        })
-        .catch(() => {});
+      persistPromises.push(
+        firestoreService
+          .saveQueryResultAndVideos(req.idToken!, uid, runId, {
+            sourceQueryId: query.id,
+            query: query.q,
+            relevanceLanguage: query.relevance_language,
+            regionCode: query.region_code,
+            status: 'failed',
+            resultCount: 0,
+            errorCode: 'QUERY_EXECUTION_ERROR',
+            errorMessage: outcome.error.error,
+            startedAt: qStartedAt,
+            completedAt: qCompletedAt,
+            videos: [],
+          })
+          .catch((e) => console.warn('[Firestore saveQueryResult error]:', e))
+      );
     }
     return outcome;
   });
+
+  // Ensure all subcollection queries and videos finish saving before returning
+  await Promise.all(persistPromises);
 
   const totalResults = results.reduce((acc, r) => acc + r.count, 0);
   const finalStatus: 'completed' | 'partial' | 'failed' =
     errors.length === 0 ? 'completed' : results.length > 0 ? 'partial' : 'failed';
   const completedAt = new Date().toISOString();
 
-  firestoreService
+  await firestoreService
     .updateSearchRunSummary(req.idToken!, uid, runId, {
       status: finalStatus,
       successfulQueries: results.length,
@@ -1196,7 +1212,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
       totalResults,
       completedAt,
     })
-    .catch(() => {});
+    .catch((e) => console.warn('[Firestore updateSearchRunSummary error]:', e));
 
   const outputObj = {
     generated_at: completedAt,
