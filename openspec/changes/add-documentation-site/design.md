@@ -1,5 +1,7 @@
 # Design
 
+> Historical tooling context: Bun references below describe the original implementation plan. Current tooling uses npm; see [README.md](../../../README.md) and [migrate-bun-to-npm](../archive/2026-10-03-migrate-bun-to-npm/design.md).
+
 ## Context
 
 See [proposal.md](proposal.md) for motivation and [the spec delta](specs/documentation-site/spec.md) for requirements. The repository uses Bun, React/Vite, an Express API, and the spec-driven OpenSpec schema. `openspec/specs/` currently has only `.gitkeep`; the existing active change opts out of spec deltas. There are no archived changes yet. Architecture Markdown includes relative links to other viewpoints, the glossary, source code, ADRs, and historical documents.

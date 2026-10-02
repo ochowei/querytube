@@ -1,5 +1,7 @@
 # Tasks
 
+> Historical validation record: Bun commands below were executed for this completed change and are retained as evidence. For current commands, use [README.md](../../../README.md); subsequent npm validation belongs to [migrate-bun-to-npm](../archive/2026-10-03-migrate-bun-to-npm/tasks.md).
+
 ## 1. Documentation infrastructure
 
 - [x] 1.1 Add VitePress as a Bun development dependency, preserve existing scripts, add docs development/build/preview commands, and ignore site output/cache; verify installation and lockfile consistency.

@@ -4,21 +4,26 @@ QueryTube is a React/Vite app with an Express backend and Firebase persistence.
 
 ## Local development
 
-Install dependencies with the repository's Bun lockfile, copy `.env.example` to `.env`, and provide the required local credentials:
+Use Node.js 22 and npm 10.9.7, declared in `package.json`. npm is the canonical package manager and `package-lock.json` is the only dependency lockfile. Install dependencies, copy `.env.example` to `.env`, and provide the required local credentials:
 
 ```sh
-bun install
+npm install
 cp .env.example .env
-bun run dev
+npm run dev
 ```
 
-The dev server keeps Vite middleware and Express in one local process. `bun run start` preserves the existing Express listener command; with `NODE_ENV=production` it serves the Vite build from `public/`, and otherwise it uses Vite middleware as before.
+For deterministic clean installation and CI verification, use `npm ci` instead of `npm install`.
 
-## Build and type check
+The repository `.npmrc` keeps legacy peer resolution because existing Vite/esbuild and React dependencies have conflicting upstream peer ranges. This preserves the dependency constraints without upgrading packages during the tooling migration.
+
+The dev server keeps Vite middleware and Express in one local process. `npm run start` preserves the existing Express listener command; with `NODE_ENV=production` it serves the Vite build from `public/`, and otherwise it uses Vite middleware as before.
+
+## Build, type check, and tests
 
 ```sh
-bun run lint
-bun run build
+npm run lint
+npm test
+npm run build
 ```
 
 The Vite build writes static files to `public/`. Vercel uses the Vite preset to publish those files through its CDN. Requests that do not match a static file are rewritten to the Express app exported by `api/index.ts`, preserving the existing API and documentation URLs.
@@ -26,17 +31,17 @@ The Vite build writes static files to `public/`. Vercel uses the Vite preset to 
 ## Documentation development
 
 ```sh
-bun run docs:dev
-bun run docs:build
-bun run docs:preview
-bun run docs:check # validate the built site's navigation and internal links
+npm run docs:dev
+npm run docs:build
+npm run docs:check # run after docs:build to validate navigation and internal links
+npm run docs:preview
 ```
 
 `docs-site/` is the VitePress presentation layer. It reads original Markdown in place: `docs/architecture/` remains current architecture, `openspec/specs/` canonical specifications, `openspec/changes/` proposed work, `CONTEXT.md` the shared domain glossary, and `openapi/` the machine-readable API contract. Existing document edits refresh during development; restart `docs:dev` after adding, removing, or renaming documents or changing sidebar titles. Build output stays in ignored `docs-site/.vitepress/dist/`; documentation is not deployed by the application build.
 
 ## Vercel deployment
 
-Import the repository into Vercel and configure the project to use Node.js 22. The repository `vercel.json` selects the Vite preset, runs `bun run build`, publishes `public/`, and includes the OpenAPI YAML and SPA entry file in the `api/index.ts` Function bundle. Function duration follows the Vercel project and plan settings; confirm those settings allow the longest expected streaming search before production cutover.
+Import the repository into Vercel and configure the project to use Node.js 22. Vercel detects npm from `package-lock.json`; no custom install command is required. The repository `vercel.json` selects the Vite preset, runs `npm run build`, publishes `public/`, and includes the OpenAPI YAML and SPA entry file in the `api/index.ts` Function bundle. Function duration follows the Vercel project and plan settings; confirm those settings allow the longest expected streaming search before production cutover.
 
 Configure these variables in each Vercel environment that needs backend access:
 

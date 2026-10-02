@@ -4,7 +4,9 @@ This view describes where the current software runs. QueryTube's system relation
 
 ## Local Development
 
-`bun run dev` starts `tsx server/dev.ts`. That entrypoint imports the shared Express application from `server/app.ts`, attaches Vite in middleware mode, and listens on the configured port. The browser UI and API are therefore served through one local Node process during development.
+Node.js 22 is the runtime and npm 10.9.7 is the canonical package manager declared in `package.json`. `package-lock.json` is the only dependency lockfile; use `npm install` for development and `npm ci` for deterministic clean installation/CI verification.
+
+`npm run dev` starts `tsx server/dev.ts`. That entrypoint imports the shared Express application from `server/app.ts`, attaches Vite in middleware mode, and listens on the configured port. The browser UI and API are therefore served through one local Node process during development.
 
 ```text
 Developer computer
@@ -13,7 +15,7 @@ Developer computer
     └── Vite development middleware
 ```
 
-`bun run start` uses the same entrypoint. With `NODE_ENV=production`, it serves the built `public/` output from Express instead of attaching Vite middleware.
+`npm run start` uses the same entrypoint. With `NODE_ENV=production`, it serves the built `public/` output from Express instead of attaching Vite middleware.
 
 ## Vercel Preview
 
@@ -39,7 +41,7 @@ Vercel Production
     └── Express application: server/app.ts
 ```
 
-`vercel.json` selects the Vite framework, runs `bun run build`, publishes `public/`, includes the OpenAPI YAML and SPA entry file in the Function bundle, and rewrites unmatched requests to `/api/index`. `server/app.ts` also has a Vercel-mode SPA fallback for unmatched GET paths after the API routes, including unknown API paths. No `maxDuration` is specified in the repository; Function duration comes from the Vercel project/plan configuration.
+`vercel.json` selects the Vite framework, runs `npm run build`, publishes `public/`, includes the OpenAPI YAML and SPA entry file in the Function bundle, and rewrites unmatched requests to `/api/index`. Vercel detects npm from `package-lock.json` using its normal installation behavior; the repository sets no custom install command. `server/app.ts` also has a Vercel-mode SPA fallback for unmatched GET paths after the API routes, including unknown API paths. No `maxDuration` is specified in the repository; Function duration comes from the Vercel project/plan configuration.
 
 The repository establishes this deployment configuration, but cannot establish whether Preview or Production deployments are active, which environment variables they contain, or whether a production cutover has occurred. The earlier migration plan and its repository-state assessment are preserved in the [archive](../archive/vercel-migration-implementation-plan.md).
 

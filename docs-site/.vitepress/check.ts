@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { changeWarning, inventory, pageLink, repositoryUrl } from './content.ts';
 
 const output = fileURLToPath(new URL('./dist/', import.meta.url));
-assert.ok(existsSync(path.join(output, 'index.html')), 'Run bun run docs:build before docs:check.');
+assert.ok(existsSync(path.join(output, 'index.html')), 'Run npm run docs:build before docs:check.');
 
 function htmlFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

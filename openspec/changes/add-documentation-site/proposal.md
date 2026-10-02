@@ -1,5 +1,7 @@
 # Proposal
 
+> Historical tooling context: this completed change records the Bun toolchain used when documentation was added. Current package-manager instructions are in [README.md](../../../README.md); the npm migration is recorded in [migrate-bun-to-npm](../archive/2026-10-03-migrate-bun-to-npm/proposal.md).
+
 ## Why
 
 QueryTube's architecture, specifications, glossary, and API contract are repository files that are inconvenient to browse as one documentation system. A browser presentation can connect these sources without changing their ownership or the existing OpenSpec workflow.

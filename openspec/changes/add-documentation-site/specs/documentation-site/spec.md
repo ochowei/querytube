@@ -56,6 +56,6 @@ Links between rendered documentation SHALL resolve within the site while origina
 Developers SHALL be able to run documentation development, build, and preview commands using the repository's package manager on macOS/Linux and in CI. These commands SHALL remain separate from application commands and SHALL NOT change application runtime, deployment, or Public API behavior.
 
 #### Scenario: Build documentation in a clean checkout
-- **WHEN** dependencies are installed from the Bun lockfile and the documentation build command runs
+- **WHEN** dependencies are installed from the repository's canonical lockfile and the documentation build command runs
 - **THEN** the site is generated in ignored documentation output with working section links
 - **AND** application build and deployment commands retain their existing behavior

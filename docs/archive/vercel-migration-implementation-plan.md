@@ -2,6 +2,8 @@
 
 > Archived planning document. The implementation plan below is retained as historical material and describes an earlier repository state. It is not a deployment checklist or current architecture description.
 
+> Package-manager references below preserve the original Bun plan. Current tooling uses npm and `package-lock.json`; see [README.md](../../README.md) for development and deployment commands.
+
 ## Status checked against current `main` (2026-10-02)
 
 | Work area | Current assessment |
