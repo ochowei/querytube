@@ -12,6 +12,6 @@ These documents describe the current architecture on `main`. They are organized 
 
 > Everything under `docs/architecture/` describes the current architecture on `main`.
 
-Future architecture changes belong in an OpenSpec change, not in a permanent target architecture document. This repository does not currently have an `openspec/` structure; the existing modularization proposal is kept separately in [planning](../planning/proposed-modular-architecture.md) until OpenSpec is adopted.
+Future architecture changes belong in OpenSpec changes, not in a permanent target architecture document. The [domain module boundary proposal](../../openspec/changes/align-domain-module-boundaries/proposal.md) is planning material and does not describe current architecture or authorize implementation.
 
 Important architecture decisions can be recorded under [ADR](../adr/README.md). Domain boundaries are logical responsibilities; they do not need a one-to-one match with C4 Components, source modules, or deployable units.

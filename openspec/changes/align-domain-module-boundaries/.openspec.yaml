@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-10-02
+goal: Create an incremental, behavior-preserving path for reducing mixed
+  implementation responsibilities.
+skip_specs: true

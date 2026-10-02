@@ -1,0 +1,35 @@
+schema: spec-driven
+
+context: |
+  OpenSpec changes are proposals for future work; they do not describe current
+  architecture or authorize implementation. Treat docs/architecture/ as the
+  current architecture on main, and verify current-state statements against
+  source code. Organize architecture by viewpoints and logical responsibilities;
+  do not assume a bounded context maps one-to-one to a component, module, service,
+  container, or deployment unit. For behavior-preserving internal refactors,
+  preserve HTTP/OpenAPI contracts, Firestore paths and fields, authorization
+  modes, credential payload compatibility, YAML behavior, and JSON/SSE semantics
+  unless a separately reviewed change explicitly changes them. Keep artifacts
+  in English to match the repository's architecture documentation.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
