@@ -101,9 +101,9 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
       {/* Query Set Status & Persistence Bar */}
       <div className="px-4 py-2 bg-zinc-950 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-zinc-400">Query Set:</span>
+          <span className="text-[11px] font-mono text-zinc-400">{activeQuerySet ? 'Query Set:' : 'Definition:'}</span>
           <span className="text-xs font-semibold text-zinc-100">
-            {activeQuerySet ? activeQuerySet.name : 'Unsaved Query Set'}
+            {activeQuerySet ? activeQuerySet.name : 'Unsaved YAML Search Definition'}
           </span>
           {hasUnsavedChanges && (
             <span className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-300 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.2 rounded">
@@ -119,7 +119,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
             onClick={onNew}
             disabled={isRunning}
             className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
-            title="Start a new blank or default query set"
+            title="Start a new YAML Search Definition"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New</span>
@@ -130,7 +130,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
             onClick={onSave}
             disabled={isRunning || !value.trim()}
             className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-white text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-            title={activeQuerySet ? `Update ${activeQuerySet.name}` : 'Save this Query Set'}
+            title={activeQuerySet ? `Update ${activeQuerySet.name}` : 'Save as a Query Set'}
           >
             <Save className="w-3.5 h-3.5 text-zinc-400" />
             <span>Save</span>
@@ -153,7 +153,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
       <div className="px-4 py-2.5 bg-zinc-950/60 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <FileCode className="w-4 h-4 text-zinc-400" />
-          <h2 className="text-xs font-semibold text-zinc-300">YAML Definition</h2>
+          <h2 className="text-xs font-semibold text-zinc-300">YAML Search Definition</h2>
           <span className="text-[10px] font-mono text-zinc-500 bg-zinc-800/60 px-1 py-0.2 rounded">
             UTF-8
           </span>

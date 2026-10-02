@@ -10,7 +10,7 @@ Let owners share selected Query Sets and Search Runs through a stable, anonymous
 
 - Serve public Query Set summaries and details.
 - Serve public Search Run summaries and details.
-- Enforce the owning context's publication field before returning a public projection.
+- Enforce Query Set publication or Search Run visibility before returning the corresponding public projection.
 - Apply request parameter limits and the current per-IP in-memory rate limiter.
 - Maintain the documented external JSON contract.
 
@@ -23,8 +23,10 @@ Let owners share selected Query Sets and Search Runs through a stable, anonymous
 
 ## Ubiquitous Language
 
-- **Public Query Set**: a Query Set whose `publicApiEnabled` flag is true.
-- **Public Search Run**: a Search Run whose own `visibility` is `public`.
+Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
+
+- **Public Query Set**: a Query Set whose owner has enabled anonymous read access through the Public Read API.
+- **Public Search Run**: a Search Run whose own visibility is public, whether or not its associated Query Set still exists or is public.
 - **Public projection**: the explicit DTO returned to an anonymous caller, rather than a raw Firestore document.
 - **Consumer**: an anonymous HTTP client using the published API.
 
@@ -64,11 +66,10 @@ Let owners share selected Query Sets and Search Runs through a stable, anonymous
 
 - [Public route handlers and in-memory rate limit](../../../../server/publicApi.ts).
 - [Admin Firestore reads and public DTO projections](../../../../server/firestoreService.ts).
-- [Query Set and Search Run publication controls](../../../../server/app.ts), [shared DTO types](../../../../src/types/index.ts), and [API documentation UI](../../../../src/components/ApiDocsView.tsx).
+- [Query Set publication and Search Run visibility controls](../../../../server/app.ts), [shared DTO types](../../../../src/types/index.ts), and [API documentation UI](../../../../src/components/ApiDocsView.tsx).
 - [OpenAPI specification](../../../../openapi/public-api.yaml).
 
 ## Related Specifications
 
 - The [OpenAPI 3.1 YAML](../../../../openapi/public-api.yaml) is the detailed machine-readable contract and remains authoritative for paths, parameters, schemas, and responses.
 - No BDD feature files or Public Read API ADRs were found.
-

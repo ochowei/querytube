@@ -9,7 +9,7 @@ Retain completed and in-progress search executions so an owner can inspect, reru
 ## Responsibilities
 
 - Store a Search Run summary and its input YAML.
-- Store one Query Result per executed YAML query and nested video records.
+- Store one Query Result per Query Outcome and its nested Video Results.
 - Track run status, query/result counts, timestamps, and optional Query Set association.
 - List runs, load full details, reconstruct output YAML, change visibility, and recursively delete a run and its subcollections.
 - Provide public summaries/details for runs that the owner marked public.
@@ -22,11 +22,13 @@ Retain completed and in-progress search executions so an owner can inspect, reru
 
 ## Ubiquitous Language
 
-- **Search Run**: one invocation of a search request, whether based on a saved Query Set or unsaved YAML.
-- **Query Result**: the success or failure record for one source YAML query.
-- **Stored video**: normalized YouTube video data nested under a Query Result.
-- **Visibility**: the Search Run's own `private` or `public` setting.
-- **Output YAML**: a normalized representation reconstructed from the stored run, query outcomes, and videos.
+Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
+
+- **Search Run**: a record of one invocation of a Search Request, whether associated with a Query Set or based on unsaved YAML.
+- **Query Result**: the Search History record of one Query Outcome within a Search Run, including its Video Results or failure information.
+- **Video Result**: a YouTube video returned for a Query and included in that Query's outcome; Search History stores it under a Query Result.
+- **Search Run visibility**: the owner's `private` or `public` choice for a Search Run, independent of Query Set publication or continued existence.
+- **Output YAML**: a normalized YAML representation reconstructed from a Search Run and its Query Results.
 
 ## Core Concepts
 
@@ -41,6 +43,7 @@ Retain completed and in-progress search executions so an owner can inspect, reru
 - A new Search Run starts with status `running` and defaults to private visibility.
 - Run visibility is independent of the referenced Query Set's `publicApiEnabled` flag.
 - Deleting a Query Set does not delete the Search Runs that refer to it; the run stores its optional Query Set ID/name as association data.
+- Rerunning uses the Search Run's input YAML and retains its historical association. If the source Query Set is absent from the loaded list, the editor treats the YAML as unsaved and Save creates a new Query Set; association metadata alone does not establish that the source still exists.
 - Deleting a Search Run recursively removes its query-result and video documents.
 - Public Search Run reads require the run's own `visibility` to be `public`; the referenced Query Set need not still exist or be public.
 
@@ -77,4 +80,3 @@ Retain completed and in-progress search executions so an owner can inspect, reru
 ## Related Specifications
 
 No BDD feature files or Search History ADRs were found. The [Public API OpenAPI specification](../../../../openapi/public-api.yaml) describes the anonymous projections, not the owner-only history API.
-

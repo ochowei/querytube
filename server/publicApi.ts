@@ -83,7 +83,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
   /**
    * GET /api/public/users/:userId/search-runs
    * List public search runs for a user (optionally filtered by querySetId)
-   * Independent from Query Set visibility
+   * Independent from Query Set publication
    */
   router.get('/users/:userId/search-runs', async (req: Request, res: Response) => {
     const { userId } = req.params;
@@ -110,7 +110,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
   /**
    * GET /api/public/users/:userId/search-runs/:runId
    * Get search run details for a public Search Run
-   * Independent from Query Set visibility
+   * Independent from Query Set publication
    */
   router.get('/users/:userId/search-runs/:runId', async (req: Request, res: Response) => {
     const { userId, runId } = req.params;

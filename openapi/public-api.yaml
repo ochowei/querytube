@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QueryTube Public API
   version: 1.0.0
-  description: Public read-only API for accessing QueryTube query sets and historical YouTube search results explicitly shared by their owners. Search Run public visibility is independent from Query Set visibility.
+  description: Public Read API for accessing Public Query Sets and Public Search Runs explicitly shared by their owners. Search Run visibility is independent of Query Set publication.
 servers:
   - url: /
     description: Current host server
@@ -12,19 +12,19 @@ paths:
       tags:
         - Query Sets
       summary: List public Query Sets
-      description: Returns a list of query set summaries for the specified user that have been explicitly enabled for public read access. Does not include raw YAML definitions.
+      description: Returns Public Query Set summaries for the specified user. Does not include their YAML Search Definitions.
       operationId: listPublicQuerySets
       parameters:
         - name: userId
           in: path
           required: true
-          description: The Firebase UID of the query set owner.
+          description: The Firebase UID of the Query Set owner.
           schema:
             type: string
           example: cabeceowei-uid-123
       responses:
         '200':
-          description: Successfully retrieved public query sets list.
+          description: Successfully retrieved Public Query Set list.
           content:
             application/json:
               schema:
@@ -67,13 +67,13 @@ paths:
       tags:
         - Query Sets
       summary: Get public Query Set details
-      description: Returns the full public Query Set, including its raw YAML specification, if the owner has enabled Public API access.
+      description: Returns the Public Query Set, including its YAML Search Definition, if the owner has enabled Query Set publication.
       operationId: getPublicQuerySet
       parameters:
         - name: userId
           in: path
           required: true
-          description: The Firebase UID of the query set owner.
+          description: The Firebase UID of the Query Set owner.
           schema:
             type: string
           example: cabeceowei-uid-123
@@ -131,7 +131,7 @@ paths:
       tags:
         - Search Runs
       summary: List public Search Runs
-      description: Returns lightweight execution run summaries for the specified user that have been explicitly marked public by their owner, ordered newest first. Search Run public visibility is independent from Query Set visibility. Does not return heavy YAML or video lists. If querySetId filter is provided, only public search runs originating from that query set are returned.
+      description: Returns Public Search Run summaries for the specified user, ordered newest first. Search Run visibility is independent of Query Set publication. Does not return input YAML or Video Result lists. If querySetId is provided, only Public Search Runs associated with that Query Set are returned; the Query Set need not still exist or be public.
       operationId: listPublicSearchRuns
       parameters:
         - name: userId
@@ -144,7 +144,7 @@ paths:
         - name: limit
           in: query
           required: false
-          description: Maximum number of search runs to return (1-100, default 50).
+          description: Maximum number of Search Runs to return (1-100, default 50).
           schema:
             type: integer
             default: 50
@@ -209,8 +209,8 @@ paths:
     get:
       tags:
         - Search Runs
-      summary: Get public search run details
-      description: Returns the full details of a search run, including executed input YAML, query results, and normalized video items, provided the Search Run itself has been explicitly marked public by its owner. Search Run public visibility is independent from Query Set visibility.
+      summary: Get Public Search Run details
+      description: Returns the Public Search Run, including its executed YAML Search Definition, Query Results, and Video Results. The Search Run itself must have public visibility, independently of Query Set publication or continued existence.
       operationId: getPublicSearchRunDetails
       parameters:
         - name: userId
@@ -301,14 +301,14 @@ paths:
     get:
       tags:
         - Search Runs
-      summary: List search runs for a query set (convenience endpoint)
-      description: Backward-compatible convenience endpoint equivalent to GET /api/public/users/{userId}/search-runs?querySetId={querySetId}. Returns public search runs originated from this query set.
+      summary: List Public Search Runs associated with a Query Set (convenience endpoint)
+      description: Backward-compatible convenience endpoint equivalent to GET /api/public/users/{userId}/search-runs?querySetId={querySetId}. Returns Public Search Runs associated with this Query Set, independently of Query Set publication or continued existence.
       operationId: listPublicSearchRunsByQuerySet
       parameters:
         - name: userId
           in: path
           required: true
-          description: The Firebase UID of the query set owner.
+          description: The Firebase UID of the Query Set owner.
           schema:
             type: string
           example: cabeceowei-uid-123
@@ -322,7 +322,7 @@ paths:
         - name: limit
           in: query
           required: false
-          description: Maximum number of search runs to return (1-100, default 50).
+          description: Maximum number of Search Runs to return (1-100, default 50).
           schema:
             type: integer
             default: 50
@@ -381,15 +381,15 @@ components:
           description: Name of the Query Set.
         queryCount:
           type: integer
-          description: Number of queries in the YAML definition.
+          description: Number of Queries in the YAML Search Definition.
         createdAt:
           type: string
           format: date-time
-          description: ISO timestamp when the query set was created.
+          description: ISO timestamp when the Query Set was created.
         updatedAt:
           type: string
           format: date-time
-          description: ISO timestamp when the query set was last modified.
+          description: ISO timestamp when the Query Set was last modified.
 
     PublicQuerySet:
       type: object
@@ -409,18 +409,18 @@ components:
           description: Name of the Query Set.
         rawYaml:
           type: string
-          description: Raw YAML definition string.
+          description: The saved YAML Search Definition expressed as a string.
         queryCount:
           type: integer
-          description: Number of queries in the YAML definition.
+          description: Number of Queries in the YAML Search Definition.
         createdAt:
           type: string
           format: date-time
-          description: ISO timestamp when the query set was created.
+          description: ISO timestamp when the Query Set was created.
         updatedAt:
           type: string
           format: date-time
-          description: ISO timestamp when the query set was last modified.
+          description: ISO timestamp when the Query Set was last modified.
 
     PublicSearchRunSummary:
       type: object
@@ -437,15 +437,15 @@ components:
       properties:
         id:
           type: string
-          description: Unique identifier of the search run.
+          description: Unique identifier of the Search Run.
         querySetId:
           type: string
           nullable: true
-          description: Identifier of the source Query Set if originated from one.
+          description: Historical association with a source Query Set, which need not still exist.
         querySetName:
           type: string
           nullable: true
-          description: Name of the parent Query Set at run time.
+          description: Name of the associated Query Set at run time, which need not match its current name.
         status:
           type: string
           enum: [running, completed, partial, failed]
@@ -461,7 +461,7 @@ components:
           description: Number of queries that encountered errors.
         totalResults:
           type: integer
-          description: Total number of video items found across all queries.
+          description: Total number of Video Results across all Query Results.
         startedAt:
           type: string
           format: date-time
@@ -474,11 +474,11 @@ components:
         createdAt:
           type: string
           format: date-time
-          description: ISO timestamp of search run document creation.
+          description: ISO timestamp of Search Run document creation.
         visibility:
           type: string
           enum: [public]
-          description: Public visibility status.
+          description: Search Run visibility; only public Search Runs are returned.
           example: public
 
     PublicSearchRun:
@@ -498,15 +498,15 @@ components:
       properties:
         id:
           type: string
-          description: Unique identifier of the search run.
+          description: Unique identifier of the Search Run.
         querySetId:
           type: string
           nullable: true
-          description: Identifier of the source Query Set if originated from one.
+          description: Historical association with a source Query Set, which need not still exist.
         querySetName:
           type: string
           nullable: true
-          description: Name of the parent Query Set at run time.
+          description: Name of the associated Query Set at run time, which need not match its current name.
         status:
           type: string
           enum: [running, completed, partial, failed]
@@ -522,10 +522,10 @@ components:
           description: Number of queries that encountered errors.
         totalResults:
           type: integer
-          description: Total number of video items found across all queries.
+          description: Total number of Video Results across all Query Results.
         inputYaml:
           type: string
-          description: The input YAML executed during this search run.
+          description: The YAML Search Definition executed during this Search Run.
         startedAt:
           type: string
           format: date-time
@@ -538,15 +538,15 @@ components:
         createdAt:
           type: string
           format: date-time
-          description: ISO timestamp of search run document creation.
+          description: ISO timestamp of Search Run document creation.
         visibility:
           type: string
           enum: [public]
-          description: Public visibility status.
+          description: Search Run visibility; only public Search Runs are returned.
           example: public
         queryResults:
           type: array
-          description: Individual query results and videos.
+          description: Query Results within this Search Run, including their Video Results or failure information.
           items:
             $ref: '#/components/schemas/QueryResult'
 
@@ -564,7 +564,7 @@ components:
       properties:
         id:
           type: string
-          description: Unique result identifier.
+          description: Unique identifier of the Query Result.
         sourceQueryId:
           type: string
           description: ID from the YAML query definition.
@@ -582,10 +582,10 @@ components:
         status:
           type: string
           enum: [success, failed]
-          description: Query outcome.
+          description: Success or failure status of the recorded Query Outcome.
         resultCount:
           type: integer
-          description: Number of video results returned.
+          description: Number of Video Results in this Query Result.
         errorCode:
           type: string
           nullable: true
@@ -604,7 +604,7 @@ components:
           description: ISO timestamp when this individual query finished.
         videos:
           type: array
-          description: Video items returned for this query.
+          description: Video Results included in this Query Result.
           items:
             $ref: '#/components/schemas/Video'
 

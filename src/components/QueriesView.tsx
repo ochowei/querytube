@@ -305,7 +305,7 @@ export const QueriesView: React.FC<QueriesViewProps> = ({
                           )}
                         </div>
                         <p className="text-[11px] text-zinc-400 leading-snug">
-                          Allow this Query Set and its search runs to be accessed through the public read-only API.
+                          Publish this Query Set through the Public Read API. Search Run visibility is managed separately in Search History.
                         </p>
                       </div>
 

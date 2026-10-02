@@ -152,7 +152,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             <span>Search History</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Manage search results and control independent Public API access
+            Manage Search Runs and control their visibility in the Public Read API
           </p>
         </div>
 

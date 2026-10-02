@@ -567,7 +567,7 @@ export class FirestoreService {
     for (const run of runs) userRuns.set(run.id, run);
 
     // Filter strictly by Search Run's OWN visibility === 'public'.
-    // Independent from Query Set visibility
+    // Independent from Query Set publication
     let matchedRuns = runs.filter((run) => run.visibility === 'public');
 
     // Optional filter by querySetId if provided

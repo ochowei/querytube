@@ -16,6 +16,7 @@ import { ApiDocsView } from './components/ApiDocsView';
 import { SaveQuerySetModal } from './components/SaveQuerySetModal';
 import { useAuth } from './context/AuthContext';
 import { authenticatedFetch } from './utils/authenticatedFetch';
+import { resolveSearchRunSource, type SearchRunAssociation } from './utils/searchRunSource';
 import { validateYamlString, SAMPLE_YAMLS, ValidationResult } from './utils/yamlValidator';
 import { QuerySet, SearchRun, SearchRunDetails, ApiDocsNavigationContext, ResourceVisibility } from './types';
 import { AlertCircle, X, Terminal, CheckCircle2, Loader2 } from 'lucide-react';
@@ -63,6 +64,7 @@ export default function App() {
   const [querySetsError, setQuerySetsError] = useState<string | null>(null);
   const [activeQuerySet, setActiveQuerySet] = useState<QuerySet | null>(null);
   const [activeQuerySetOriginalYaml, setActiveQuerySetOriginalYaml] = useState<string | null>(null);
+  const [historicalQuerySetAssociation, setHistoricalQuerySetAssociation] = useState<SearchRunAssociation | null>(null);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState<boolean>(false);
   const [isSaveAsMode, setIsSaveAsMode] = useState<boolean>(false);
 
@@ -112,6 +114,7 @@ export default function App() {
     setLoadingQuerySets(false);
     setActiveQuerySet(null);
     setActiveQuerySetOriginalYaml(null);
+    setHistoricalQuerySetAssociation(null);
     setSearchRuns([]);
     setSearchRunsError(null);
     setLoadingSearchRuns(false);
@@ -198,8 +201,8 @@ export default function App() {
       }
     } catch (err) {
       if (isCurrentUser(uid, generation) && !signal?.aborted) {
-        console.error('[QuerySets] Failed to load saved queries.');
-        setQuerySetsError('Failed to load saved queries. Retry.');
+        console.error('[QuerySets] Failed to load Query Sets.');
+        setQuerySetsError('Failed to load Query Sets. Retry.');
       }
     } finally {
       if (isCurrentUser(uid, generation)) setLoadingQuerySets(false);
@@ -327,17 +330,19 @@ export default function App() {
   const handleNewQuerySet = () => {
     setActiveQuerySet(null);
     setActiveQuerySetOriginalYaml(null);
+    setHistoricalQuerySetAssociation(null);
     setYamlInput(SAMPLE_YAMLS.default.yaml);
     setOutputYaml('');
     setOutputData(null);
     setProgressQueries([]);
-    setSuccessNotice('Started a new query set template.');
+    setSuccessNotice('Started a new YAML Search Definition.');
     setTimeout(() => setSuccessNotice(null), 3000);
   };
 
   const handleLoadQuerySet = (qs: QuerySet) => {
     setActiveQuerySet(qs);
     setActiveQuerySetOriginalYaml(qs.rawYaml);
+    setHistoricalQuerySetAssociation(null);
     setYamlInput(qs.rawYaml);
     setOutputYaml('');
     setOutputData(null);
@@ -385,6 +390,7 @@ export default function App() {
         if (!isCurrentUser(ownerUid)) return;
         setActiveQuerySet(updated);
         setActiveQuerySetOriginalYaml(yamlInput);
+        setHistoricalQuerySetAssociation(null);
         setQuerySets((prev) => prev.map((item) => (item.id === id ? updated : item)));
         setSuccessNotice(`Query Set "${name}" saved!`);
         setTimeout(() => setSuccessNotice(null), 3500);
@@ -419,6 +425,7 @@ export default function App() {
         if (!isCurrentUser(ownerUid)) return;
         setActiveQuerySet(created);
         setActiveQuerySetOriginalYaml(yamlInput);
+        setHistoricalQuerySetAssociation(null);
         setQuerySets((prev) => [created, ...prev]);
         setSuccessNotice(`Saved as new Query Set: "${name}"`);
         setTimeout(() => setSuccessNotice(null), 3500);
@@ -586,30 +593,13 @@ export default function App() {
     querySetName?: string | null
   ) => {
     setYamlInput(inputYaml);
-    if (querySetId) {
-      const existing = querySets.find((q) => q.id === querySetId);
-      if (existing) {
-        setActiveQuerySet(existing);
-        setActiveQuerySetOriginalYaml(existing.rawYaml);
-      } else {
-        setActiveQuerySet({
-          id: querySetId,
-          name: querySetName || 'Historical Query Set',
-          rawYaml: inputYaml,
-          queryCount: validation.queryCount,
-          publicApiEnabled: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-        setActiveQuerySetOriginalYaml(inputYaml);
-      }
-    } else {
-      setActiveQuerySet(null);
-      setActiveQuerySetOriginalYaml(null);
-    }
+    const source = resolveSearchRunSource(querySets, { querySetId, querySetName });
+    setActiveQuerySet(source.querySet);
+    setActiveQuerySetOriginalYaml(source.originalYaml);
+    setHistoricalQuerySetAssociation(source.association);
 
     setActiveTab('search');
-    void handleRunSearch(inputYaml, querySetId, querySetName);
+    void handleRunSearch(inputYaml, source.association.querySetId, source.association.querySetName);
   };
 
   // --- Manual Validation ---
@@ -704,8 +694,12 @@ export default function App() {
 
     const requestPayload = {
       yaml: targetYaml,
-      querySetId: overrideQuerySetId !== undefined ? overrideQuerySetId : activeQuerySet?.id || null,
-      querySetName: overrideQuerySetName !== undefined ? overrideQuerySetName : activeQuerySet?.name || null,
+      querySetId: overrideQuerySetId !== undefined
+        ? overrideQuerySetId
+        : activeQuerySet?.id ?? historicalQuerySetAssociation?.querySetId ?? null,
+      querySetName: overrideQuerySetName !== undefined
+        ? overrideQuerySetName
+        : activeQuerySet?.name ?? historicalQuerySetAssociation?.querySetName ?? null,
     };
 
     try {

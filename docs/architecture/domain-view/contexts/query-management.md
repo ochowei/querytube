@@ -22,9 +22,12 @@ Define search input in YAML and let an authenticated user save reusable definiti
 
 ## Ubiquitous Language
 
-- **YAML search definition**: raw YAML containing a `queries` list and optional defaults.
+Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
+
+- **YAML Search Definition**: a structured definition of one or more searches expressed as YAML, containing a `queries` list and optional defaults.
 - **Query**: one YAML item with an ID (`id`) and search text (`q`), plus optional search parameters.
-- **Query Set**: a user's named, persisted YAML definition with a cached query count and a `publicApiEnabled` flag.
+- **Query Set**: a named, reusable YAML Search Definition saved by a user.
+- **Query Set publication**: the owner's choice to make a Query Set available to anonymous readers through the Public Read API.
 - **Default**: shared search parameters that a query can override when executed.
 
 ## Core Concepts
@@ -77,4 +80,3 @@ Define search input in YAML and let an authenticated user save reusable definiti
 ## Related Specifications
 
 No BDD feature files or Query Management ADRs were found. The YAML examples in `src/utils/yamlValidator.ts` are executable product examples, not a standalone schema contract.
-

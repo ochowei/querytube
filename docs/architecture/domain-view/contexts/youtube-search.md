@@ -4,7 +4,7 @@ Part of the [Domain View](../README.md). Navigate to the [Context Map](../contex
 
 ## Purpose
 
-Turn a valid YAML search definition into YouTube video results and deliver those results to the signed-in user, with progress available as a stream.
+Turn a valid YAML Search Definition into a Search Result and deliver it to the signed-in user, with progress available as a stream.
 
 ## Responsibilities
 
@@ -12,8 +12,8 @@ Turn a valid YAML search definition into YouTube video results and deliver those
 - Apply query-level parameters over YAML defaults and call YouTube Data API v3.
 - Execute multiple query items with a maximum of three concurrent workers.
 - Return either one JSON response or Server-Sent Events (SSE) for start, per-query progress, and completion.
-- Convert YouTube response items into QueryTube query/video result shapes.
-- Start historical recording and send each outcome to Search History.
+- Convert YouTube response items into Video Results within Query Outcomes.
+- Start historical recording and send each Query Outcome to Search History.
 
 ## Out of Scope
 
@@ -24,13 +24,16 @@ Turn a valid YAML search definition into YouTube video results and deliver those
 
 ## Ubiquitous Language
 
-- **Search request**: authenticated request containing raw YAML and optional Query Set ID/name.
-- **Query execution**: one YAML query sent to the YouTube search endpoint.
-- **Query outcome**: success with videos or an error for one query.
-- **Search result**: the request-level output containing successful results, errors, and summary counts.
+Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
+
+- **Search Request**: a request to execute a YAML Search Definition, with optional Query Set association.
+- **Query Outcome**: success with zero or more Video Results, or failure, for one Query.
+- **Search Result**: the request-level output made up of Query Outcomes and a summary.
 - **SSE event**: a JSON event carried over a streaming HTTP response.
 
 ## Core Concepts
+
+Executing a Query sends its search instruction to the YouTube search endpoint. This describes a process rather than a separate shared domain entity.
 
 - `QueryConfig` and `YamlDefaults`.
 - `QuerySuccessResult` / `QueryErrorResult`.
@@ -55,7 +58,7 @@ Turn a valid YAML search definition into YouTube video results and deliver those
 ## Outputs
 
 - JSON containing `runId`, `outputYaml`, and result data, or SSE events (`start`, `query_start`, `query_success`, `query_error`, `fatal_error`, `complete`).
-- Per-query result and video data plus final counts/status for Search History.
+- Query Outcomes and their Video Results plus final counts/status for Search History.
 
 ## Dependencies
 
@@ -76,4 +79,3 @@ Turn a valid YAML search definition into YouTube video results and deliver those
 ## Related Specifications
 
 No BDD feature files or search-specific ADRs were found. `openapi/public-api.yaml` specifies the anonymous read API, not the authenticated YouTube search endpoint.
-
