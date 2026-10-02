@@ -10,7 +10,9 @@ context: |
   preserve HTTP/OpenAPI contracts, Firestore paths and fields, authorization
   modes, credential payload compatibility, YAML behavior, and JSON/SSE semantics
   unless a separately reviewed change explicitly changes them. Keep artifacts
-  in English to match the repository's architecture documentation.
+  in English to match the repository's architecture documentation. Use the
+  repository-root CONTEXT.md as the canonical domain glossary and reuse its terms
+  in OpenSpec artifacts; update it when a domain term is resolved or changed.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
