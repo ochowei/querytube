@@ -1,4 +1,26 @@
-# QueryTube Vercel Migration — Implementation Plan
+# QueryTube Vercel Migration — Historical Implementation Plan
+
+> Archived planning document. The implementation plan below is retained as historical material and describes an earlier repository state. It is not a deployment checklist or current architecture description.
+
+## Status checked against current `main` (2026-10-02)
+
+| Work area | Current assessment |
+|---|---|
+| Express app extraction and runtime entrypoints (Phase A) | Implemented in the repository: `server/app.ts` is shared by `api/index.ts` and `server/dev.ts`; `dev` and `start` point to `server/dev.ts`. |
+| Vite static build and Vercel Function routing (Phase B) | Implemented in repository configuration: Vite outputs `public/`; `vercel.json` selects Vite, includes Function files, and rewrites unmatched requests to `/api/index`. Actual Preview/Production routing is not verifiable from this checkout. |
+| Firebase/Admin configuration (Phase C) | Explicit env-variable checks for Vercel and service-account support are implemented. Actual deployed project/database IDs and whether the configured encryption key can read existing documents are not verifiable here. The checked-in browser Firebase project differs from the server's fallback project; see the [Deployment View](../architecture/deployment-view.md). |
+| OpenAPI, public API and process memory (Phase D) | The public router, per-process rate-limit map, OpenAPI loading, and Vercel Function file inclusion are present. Vercel WAF or other account-level settings are outside the repository and unverified. |
+| JSON/SSE search (Phase E) | Both response modes, a three-worker query runner, and awaited persistence promises are present in `server/app.ts`. Vercel streaming behavior and effective Function duration require a live deployment check; no `maxDuration` is set in this repository. |
+| Documentation and smoke checks (Phase F) | A deployment README exists. The plan's Preview/production smoke checks are not evidenced as completed. The old statement that no test script or test files exist is superseded: `package.json` defines `test` and `tests/` contains test files. |
+| Cutover and rollback (Phase G) | Production cutover, active deployments, and availability of the prior deployment cannot be established from repository state. Treat them as unverified operational work. |
+
+The source/configuration work for migration is largely present. Live environment validation, streaming checks, cutover, and rollback status remain unverified, so this archive does not claim that Production has migrated.
+
+### Superseded repository-state statements in the historical plan
+
+The plan's original baseline and some phase descriptions are now stale: the server lifecycle is no longer rooted in the former `server.ts`; the Admin module reads `FIREBASE_PROJECT_ID` and `FIRESTORE_DATABASE_ID` environment variables/fallbacks instead of deriving them from the browser config; `.env.example` now lists both IDs and Admin service-account variables; the AES encryption helper has no source-code key fallback; Vite output is `public/`; and a test script/files now exist. In particular, do not use the historical claims that `firebase-applet-config.json` overrides the server project ID or that the browser and server use the same named database as current facts.
+
+The original plan follows for historical context; its remaining text is preserved as authored and should be read with this status assessment.
 
 這份計劃根據 repo 現況修訂，目標是把部署從 Express 同時提供前後端，改成 Vite 靜態前端加 Vercel Node.js Function，同時保留現有 API、Firestore 資料格式、登入方式、搜尋流程與本機開發方式。
 

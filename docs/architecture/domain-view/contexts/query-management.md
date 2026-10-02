@@ -1,5 +1,7 @@
 # Query Management
 
+Part of the [Domain View](../README.md). Navigate to the [Context Map](../context-map.md), [System View](../../system-view.md), [Software View](../../software-view.md), [Code View](../../code-view.md), and [Deployment View](../../deployment-view.md).
+
 ## Purpose
 
 Define search input in YAML and let an authenticated user save reusable definitions as Query Sets.
@@ -65,12 +67,12 @@ Define search input in YAML and let an authenticated user save reusable definiti
 
 ## Related Code
 
-- [Browser YAML validator and samples](../../src/utils/yamlValidator.ts).
-- [Server parsed-YAML validator](../../server/yamlValidator.ts).
-- [Query Set routes and search routes](../../server/app.ts).
-- [Query Set persistence and public projections](../../server/firestoreService.ts).
-- [Search workspace](../../src/App.tsx), [YAML editor](../../src/components/YamlEditor.tsx), and [saved Query Set view](../../src/components/QueriesView.tsx).
-- [Shared TypeScript models](../../src/types/index.ts).
+- [Browser YAML validator and samples](../../../../src/utils/yamlValidator.ts).
+- [Server parsed-YAML validator](../../../../server/yamlValidator.ts).
+- [Query Set routes and search routes](../../../../server/app.ts).
+- [Query Set persistence and public projections](../../../../server/firestoreService.ts).
+- [Search workspace](../../../../src/App.tsx), [YAML editor](../../../../src/components/YamlEditor.tsx), and [saved Query Set view](../../../../src/components/QueriesView.tsx).
+- [Shared TypeScript models](../../../../src/types/index.ts).
 
 ## Related Specifications
 

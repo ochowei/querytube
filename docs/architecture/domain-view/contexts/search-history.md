@@ -1,5 +1,7 @@
 # Search History
 
+Part of the [Domain View](../README.md). Navigate to the [Context Map](../context-map.md), [System View](../../system-view.md), [Software View](../../software-view.md), [Code View](../../code-view.md), and [Deployment View](../../deployment-view.md).
+
 ## Purpose
 
 Retain completed and in-progress search executions so an owner can inspect, rerun from saved input, change public visibility, or delete past work.
@@ -67,12 +69,12 @@ Retain completed and in-progress search executions so an owner can inspect, reru
 
 ## Related Code
 
-- [Search Run HTTP routes and execution orchestration](../../server/app.ts).
-- [Search Run, query result, video persistence, history reads, and deletion](../../server/firestoreService.ts).
-- [Shared Search Run and result types](../../src/types/index.ts).
-- [History list and detail UI](../../src/components/HistoryView.tsx), [run detail modal](../../src/components/SearchRunDetailModal.tsx), and [application handlers](../../src/App.tsx).
+- [Search Run HTTP routes and execution orchestration](../../../../server/app.ts).
+- [Search Run, query result, video persistence, history reads, and deletion](../../../../server/firestoreService.ts).
+- [Shared Search Run and result types](../../../../src/types/index.ts).
+- [History list and detail UI](../../../../src/components/HistoryView.tsx), [run detail modal](../../../../src/components/SearchRunDetailModal.tsx), and [application handlers](../../../../src/App.tsx).
 
 ## Related Specifications
 
-No BDD feature files or Search History ADRs were found. The [Public API OpenAPI specification](../../openapi/public-api.yaml) describes the anonymous projections, not the owner-only history API.
+No BDD feature files or Search History ADRs were found. The [Public API OpenAPI specification](../../../../openapi/public-api.yaml) describes the anonymous projections, not the owner-only history API.
 

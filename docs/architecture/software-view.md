@@ -1,0 +1,91 @@
+# Software View
+
+This is the C4 software structure of QueryTube as implemented on `main`. For actors and external systems, see the [System View](system-view.md). Logical responsibilities are in the [Domain View](domain-view/README.md), physical source organization in the [Code View](code-view.md), and runtime nodes in the [Deployment View](deployment-view.md).
+
+## Containers
+
+```mermaid
+flowchart LR
+  User[User's browser]
+  Consumer[Anonymous API consumer]
+
+  subgraph QueryTube[QueryTube]
+    Web[React / Vite Web Application]
+    API[Express API Application]
+  end
+
+  FirebaseAuth[Firebase Authentication]
+  Firestore[(Cloud Firestore)]
+  YouTube[YouTube Data API v3]
+
+  User -->|Uses browser UI| Web
+  Web -->|Same-origin authenticated JSON / SSE| API
+  Consumer -->|Anonymous read-only HTTP GET| API
+  Web -->|Google sign-in and token| FirebaseAuth
+  API -->|Verifies protected request token| FirebaseAuth
+  API -->|Reads and writes user data / public projections| Firestore
+  API -->|Key verification and search| YouTube
+```
+
+The React/Vite application is the browser UI and client of the HTTP API. The Express application handles authenticated application routes and anonymous public reads. These are the two current software containers; the Vercel Function, local Node process, and Vite static output are deployment details in the [Deployment View](deployment-view.md).
+
+## Components
+
+### React / Vite Web Application
+
+```mermaid
+flowchart LR
+  subgraph Browser[React / Vite Web Application]
+    Bootstrap[src/main.tsx<br/>mounts AuthProvider and App]
+    Auth[AuthContext and Firebase Web setup<br/>src/context/AuthContext.tsx<br/>src/firebase.ts]
+    App[src/App.tsx<br/>application state, API calls, search and SSE orchestration]
+    Fetch[src/utils/authenticatedFetch.ts<br/>bearer token and one 401 refresh retry]
+    Yaml[src/utils/yamlValidator.ts<br/>browser YAML parsing and validation]
+    Views[src/components/*<br/>feature views and presentation]
+
+    Bootstrap --> Auth
+    Auth --> App
+    App --> Fetch
+    App --> Yaml
+    App --> Views
+  end
+
+  FirebaseAuth[Firebase Authentication]
+  Auth -->|Firebase Web SDK| FirebaseAuth
+```
+
+`src/App.tsx` is a stateful coordinator for search, Query Sets, key settings, history, tab state, and API documentation navigation. Feature views are separate React components, while much of the data loading, API request, and SSE lifecycle remains in `App.tsx`. The app uses tab state rather than a URL router.
+
+### Express API Application
+
+```mermaid
+flowchart LR
+  FunctionEntry[Vercel Function adapter<br/>api/index.ts]
+  subgraph Express[Express API Application]
+    App[server/app.ts<br/>auth middleware and routes;<br/>credential lifecycle and REST calls;<br/>Query Set CRUD; search execution / SSE;<br/>Search Run orchestration; OpenAPI and SPA fallback]
+    Validator[server/yamlValidator.ts<br/>parsed-object validator]
+    Public[server/publicApi.ts<br/>anonymous router and per-process rate limit]
+    Store[FirestoreService<br/>Query Sets, Search Runs, query results,<br/>videos, public projections, caches and conversion]
+    Admin[server/firebaseAdmin.ts<br/>Firebase Admin Auth / Firestore setup]
+  end
+
+  FirebaseAuth[Firebase Authentication]
+  Firestore[(Cloud Firestore)]
+  YouTube[YouTube Data API v3]
+
+  FunctionEntry --> App
+  App --> Validator
+  App --> Public
+  App --> Store
+  App --> Admin
+  Admin --> Store
+  Public --> Store
+  Admin -->|Firebase Admin Auth| FirebaseAuth
+  App -->|Key verification and search requests| YouTube
+  App -->|Credential document REST calls using user token| Firestore
+  Store -->|Admin SDK reads and user-token REST calls| Firestore
+```
+
+`api/index.ts` is the Vercel adapter; local startup is described in the Deployment View. `server/app.ts` currently combines route registration, authentication, YouTube-key encryption and persistence, search execution, and Search Run orchestration. `FirestoreService` combines Query Set and Search Run persistence, public reads/projections, data conversion, and process-local caches. The public router is a separate source module, while publication changes remain in `server/app.ts`.
+
+These are current implementation components and responsibilities. The logical responsibilities named in the [Domain View](domain-view/README.md) are not all separate components: the current code does not contain distinct `QueryService`, `SearchService`, or `HistoryService` modules.

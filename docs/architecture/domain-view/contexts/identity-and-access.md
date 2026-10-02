@@ -1,5 +1,7 @@
 # Identity and Access
 
+Part of the [Domain View](../README.md). Navigate to the [Context Map](../context-map.md), [System View](../../system-view.md), [Software View](../../software-view.md), [Code View](../../code-view.md), and [Deployment View](../../deployment-view.md).
+
 ## Purpose
 
 Give QueryTube a Firebase-backed user identity and ensure protected operations are scoped to the signed-in user's UID.
@@ -59,12 +61,12 @@ Give QueryTube a Firebase-backed user identity and ensure protected operations a
 
 ## Related Code
 
-- [AuthContext](../../src/context/AuthContext.tsx) observes Firebase auth and provides sign-in, sign-out, token, and session-expiration actions.
-- [Firebase client setup](../../src/firebase.ts) initializes Firebase Auth and the client Firestore instance.
-- [Authenticated fetch](../../src/utils/authenticatedFetch.ts) retries one protected request after a 401 with one forced token refresh.
-- [`requireAuth` and Express routes](../../server/app.ts) verify ID tokens and use `req.user.uid`.
-- [Firebase Admin setup](../../server/firebaseAdmin.ts) initializes Admin Auth and Firestore.
-- [Firestore rules](../../firestore.rules) constrain direct client reads and writes to the authenticated user's UID.
+- [AuthContext](../../../../src/context/AuthContext.tsx) observes Firebase auth and provides sign-in, sign-out, token, and session-expiration actions.
+- [Firebase client setup](../../../../src/firebase.ts) initializes Firebase Auth and the client Firestore instance.
+- [Authenticated fetch](../../../../src/utils/authenticatedFetch.ts) retries one protected request after a 401 with one forced token refresh.
+- [`requireAuth` and Express routes](../../../../server/app.ts) verify ID tokens and use `req.user.uid`.
+- [Firebase Admin setup](../../../../server/firebaseAdmin.ts) initializes Admin Auth and Firestore.
+- [Firestore rules](../../../../firestore.rules) constrain direct client reads and writes to the authenticated user's UID.
 
 ## Related Specifications
 

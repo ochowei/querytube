@@ -1,12 +1,14 @@
-# Target Architecture (TO-BE)
+# Proposed Modular Architecture
 
-> This document describes a target direction, not the current architecture and not a commitment to perform a large-scale rewrite.
+> Planning material only: this proposal is not current architecture and is not a commitment to perform a large-scale rewrite. It is kept outside `docs/architecture/`.
+>
+> This repository has no initialized `openspec/` structure. When OpenSpec is adopted, carry applicable direction into a reviewed OpenSpec change.
 
-The target is a modular monolith: keep the current browser application, HTTP API, Firestore database, and deployment shape while making the source responsibilities easier to identify and change. Domain alignment does not require every bounded context to become a service, package, or deployable unit.
+The proposed direction is a modular monolith: keep the current browser application, HTTP API, Firestore database, and deployment shape while making the source responsibilities easier to identify and change. Domain alignment does not require every bounded context to become a service, package, or deployable unit.
 
 ## Goals
 
-- Bring code ownership closer to the logical boundaries in [Domain Map](../domain-map.md).
+- Bring code ownership closer to the logical boundaries in [Domain View](../architecture/domain-view/README.md).
 - Reduce the number of unrelated behaviors affected by one change.
 - Make identity, credential, query, execution, history, and public-projection responsibilities explicit.
 - Preserve current route behavior, Firestore paths and document fields, key compatibility, JSON/SSE semantics, and public OpenAPI schemas while moving code.

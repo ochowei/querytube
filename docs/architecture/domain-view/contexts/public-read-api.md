@@ -1,5 +1,7 @@
 # Public Read API
 
+Part of the [Domain View](../README.md). Navigate to the [Context Map](../context-map.md), [System View](../../system-view.md), [Software View](../../software-view.md), [Code View](../../code-view.md), and [Deployment View](../../deployment-view.md).
+
 ## Purpose
 
 Let owners share selected Query Sets and Search Runs through a stable, anonymous, read-only HTTP API.
@@ -60,13 +62,13 @@ Let owners share selected Query Sets and Search Runs through a stable, anonymous
 
 ## Related Code
 
-- [Public route handlers and in-memory rate limit](../../server/publicApi.ts).
-- [Admin Firestore reads and public DTO projections](../../server/firestoreService.ts).
-- [Query Set and Search Run publication controls](../../server/app.ts), [shared DTO types](../../src/types/index.ts), and [API documentation UI](../../src/components/ApiDocsView.tsx).
-- [OpenAPI specification](../../openapi/public-api.yaml).
+- [Public route handlers and in-memory rate limit](../../../../server/publicApi.ts).
+- [Admin Firestore reads and public DTO projections](../../../../server/firestoreService.ts).
+- [Query Set and Search Run publication controls](../../../../server/app.ts), [shared DTO types](../../../../src/types/index.ts), and [API documentation UI](../../../../src/components/ApiDocsView.tsx).
+- [OpenAPI specification](../../../../openapi/public-api.yaml).
 
 ## Related Specifications
 
-- The [OpenAPI 3.1 YAML](../../openapi/public-api.yaml) is the detailed machine-readable contract and remains authoritative for paths, parameters, schemas, and responses.
+- The [OpenAPI 3.1 YAML](../../../../openapi/public-api.yaml) is the detailed machine-readable contract and remains authoritative for paths, parameters, schemas, and responses.
 - No BDD feature files or Public Read API ADRs were found.
 

@@ -1,5 +1,7 @@
 # QueryTube Context Map
 
+Part of the [Domain View](README.md). See the [Domain Map](README.md), [System View](../system-view.md), [Software View](../software-view.md), [Code View](../code-view.md), and [Deployment View](../deployment-view.md).
+
 This map describes information and responsibility flowing between the logical contexts. It is not a source-module diagram: the current implementation places several of these responsibilities in the same Express application and in `FirestoreService`.
 
 ```mermaid
@@ -57,7 +59,7 @@ flowchart LR
 ## Boundary notes
 
 - The Firebase UID is the owner key used in authenticated routes and Firestore paths such as `users/{uid}/querySets` and `users/{uid}/searchRuns`. `requireAuth` obtains it from a verified Firebase ID token. The anonymous Public Read API instead accepts a `userId` path parameter and must apply the publication rules before returning data.
-- Firestore is shared infrastructure, not a domain. It stores YouTube credentials, Query Sets, Search Runs, query results, and videos. The current service uses both Firebase Admin SDK reads and Firestore REST calls with a user's ID token; see [Current Architecture](architecture/current.md).
+- Firestore is shared infrastructure, not a domain. It stores YouTube credentials, Query Sets, Search Runs, query results, and videos. The current service uses both Firebase Admin SDK reads and Firestore REST calls with a user's ID token; see [Code View](../code-view.md).
 - Public API is an HTTP boundary and published contract, not a separate owner of Query Set or Search Run facts. Its implementation currently reads the shared store directly and maps stored models to public projections.
 - No formal DDD context-map pattern is assigned to the internal relationships: they are same-process calls and shared persistence today. The OpenAPI YAML is a published consumer contract, but it does not make the backend a separate service.
 

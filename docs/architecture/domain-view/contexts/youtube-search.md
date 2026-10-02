@@ -1,5 +1,7 @@
 # YouTube Search
 
+Part of the [Domain View](../README.md). Navigate to the [Context Map](../context-map.md), [System View](../../system-view.md), [Software View](../../software-view.md), [Code View](../../code-view.md), and [Deployment View](../../deployment-view.md).
+
 ## Purpose
 
 Turn a valid YAML search definition into YouTube video results and deliver those results to the signed-in user, with progress available as a stream.
@@ -65,11 +67,11 @@ Turn a valid YAML search definition into YouTube video results and deliver those
 
 ## Related Code
 
-- [Search validation and execution routes](../../server/app.ts).
-- [Server YAML validator](../../server/yamlValidator.ts) and [browser validator](../../src/utils/yamlValidator.ts).
-- [Search Run/result persistence](../../server/firestoreService.ts).
-- [Search UI, request handling, and SSE event parsing](../../src/App.tsx).
-- [Progress and result views](../../src/components/QueryStatusList.tsx), [YAML output view](../../src/components/YamlViewer.tsx), and [video cards](../../src/components/VideoCardsPreview.tsx).
+- [Search validation and execution routes](../../../../server/app.ts).
+- [Server YAML validator](../../../../server/yamlValidator.ts) and [browser validator](../../../../src/utils/yamlValidator.ts).
+- [Search Run/result persistence](../../../../server/firestoreService.ts).
+- [Search UI, request handling, and SSE event parsing](../../../../src/App.tsx).
+- [Progress and result views](../../../../src/components/QueryStatusList.tsx), [YAML output view](../../../../src/components/YamlViewer.tsx), and [video cards](../../../../src/components/VideoCardsPreview.tsx).
 
 ## Related Specifications
 

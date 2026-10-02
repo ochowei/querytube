@@ -1,5 +1,7 @@
 # YouTube Credential Management
 
+Part of the [Domain View](../README.md). Navigate to the [Context Map](../context-map.md), [System View](../../system-view.md), [Software View](../../software-view.md), [Code View](../../code-view.md), and [Deployment View](../../deployment-view.md).
+
 ## Purpose
 
 Let each user provide a YouTube Data API key that QueryTube can verify and use for that user's searches without returning the raw key through the settings API.
@@ -63,11 +65,11 @@ Let each user provide a YouTube Data API key that QueryTube can verify and use f
 
 ## Related Code
 
-- [Key routes, AES-GCM helpers, verification, persistence, and cache](../../server/app.ts).
-- [Firebase project/database and Admin configuration](../../server/firebaseAdmin.ts).
-- [Key settings UI](../../src/components/ApiKeySettings.tsx) and [application handlers](../../src/App.tsx).
-- [Firestore rules](../../firestore.rules) limits direct integration access to its owner.
+- [Key routes, AES-GCM helpers, verification, persistence, and cache](../../../../server/app.ts).
+- [Firebase project/database and Admin configuration](../../../../server/firebaseAdmin.ts).
+- [Key settings UI](../../../../src/components/ApiKeySettings.tsx) and [application handlers](../../../../src/App.tsx).
+- [Firestore rules](../../../../firestore.rules) limits direct integration access to its owner.
 
 ## Related Specifications
 
-There is no separate credential API specification or ADR. Credential routes are authenticated application endpoints documented in code; the machine-readable [Public API specification](../../openapi/public-api.yaml) covers anonymous read access, not key management.
+There is no separate credential API specification or ADR. Credential routes are authenticated application endpoints documented in code; the machine-readable [Public API specification](../../../../openapi/public-api.yaml) covers anonymous read access, not key management.
