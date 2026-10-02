@@ -23,6 +23,17 @@ bun run build
 
 The Vite build writes static files to `public/`. Vercel uses the Vite preset to publish those files through its CDN. Requests that do not match a static file are rewritten to the Express app exported by `api/index.ts`, preserving the existing API and documentation URLs.
 
+## Documentation development
+
+```sh
+bun run docs:dev
+bun run docs:build
+bun run docs:preview
+bun run docs:check # validate the built site's navigation and internal links
+```
+
+`docs-site/` is the VitePress presentation layer. It reads original Markdown in place: `docs/architecture/` remains current architecture, `openspec/specs/` canonical specifications, `openspec/changes/` proposed work, `CONTEXT.md` the shared domain glossary, and `openapi/` the machine-readable API contract. Existing document edits refresh during development; restart `docs:dev` after adding, removing, or renaming documents or changing sidebar titles. Build output stays in ignored `docs-site/.vitepress/dist/`; documentation is not deployed by the application build.
+
 ## Vercel deployment
 
 Import the repository into Vercel and configure the project to use Node.js 22. The repository `vercel.json` selects the Vite preset, runs `bun run build`, publishes `public/`, and includes the OpenAPI YAML and SPA entry file in the `api/index.ts` Function bundle. Function duration follows the Vercel project and plan settings; confirm those settings allow the longest expected streaming search before production cutover.
