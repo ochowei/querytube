@@ -35,3 +35,8 @@ context: |
 #     archive:
 #       guidance:
 #         - Summarize the archive outcome before finishing
+operations:
+  apply:
+    guidance:
+      - For architecture-impacting changes, include a task to update the affected docs/architecture views after implementation.
+      - Verify architecture documentation against the resulting source and include those documentation updates with the implementation before merge.
