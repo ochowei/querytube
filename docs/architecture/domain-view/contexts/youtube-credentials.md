@@ -41,7 +41,7 @@ Let each user provide a YouTube Data API key that QueryTube can verify and use f
 - A search resolves and uses the YouTube API key stored for the UID verified on that request. The document is scoped to `users/{uid}/integrations/youtube`; this flow does not use a shared QueryTube API key.
 - Status responses expose `configured`, suffix, and verification time; they do not return the raw key.
 
-**Observed persistence caveat:** `persistUserIntegration` logs and absorbs REST failures, and the POST route updates the process cache before persistence. A success response therefore does not prove that the encrypted document was written durably. The DELETE helper also absorbs REST failures after clearing the process cache.
+**Observed persistence caveat:** `server/youtubeCredentials.ts` logs and absorbs REST persistence failures, and its configuration workflow updates the process cache before persistence. A success response therefore does not prove that the encrypted document was written durably. The DELETE helper also absorbs REST failures after clearing the process cache.
 
 ## Inputs
 
@@ -65,7 +65,8 @@ Let each user provide a YouTube Data API key that QueryTube can verify and use f
 
 ## Related Code
 
-- [Key routes, AES-GCM helpers, verification, persistence, and cache](../../../../server/app.ts).
+- [Credential lifecycle, AES-GCM helpers, verification, persistence, and per-UID cache](../../../../server/youtubeCredentials.ts).
+- [Authenticated key routes, HTTP input/status handling, and search orchestration](../../../../server/app.ts).
 - [Firebase project/database and Admin configuration](../../../../server/firebaseAdmin.ts).
 - [Key settings UI](../../../../src/components/ApiKeySettings.tsx) and [application handlers](../../../../src/App.tsx).
 - [Firestore rules](../../../../firestore.rules) limits direct integration access to its owner.
