@@ -10,55 +10,13 @@ export interface QuerySet {
   updatedAt: string;
 }
 
-// Public API DTOs
-export interface PublicQuerySetSummary {
-  id: string;
-  name: string;
-  queryCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PublicQuerySet {
-  id: string;
-  name: string;
-  rawYaml: string;
-  queryCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PublicSearchRunSummary {
-  id: string;
-  querySetId?: string | null;
-  querySetName: string | null;
-  status: SearchRunStatus;
-  queryCount: number;
-  successfulQueries: number;
-  failedQueries: number;
-  totalResults: number;
-  startedAt: string;
-  completedAt: string | null;
-  createdAt: string;
-  visibility: ResourceVisibility;
-}
-
-export interface PublicSearchRun {
-  id: string;
-  querySetId?: string | null;
-  querySetName: string | null;
-  status: SearchRunStatus;
-  queryCount: number;
-  successfulQueries: number;
-  failedQueries: number;
-  totalResults: number;
-  inputYaml: string;
-  startedAt: string;
-  completedAt: string | null;
-  createdAt: string;
-  visibility: ResourceVisibility;
-  queryResults: QueryResultItem[];
-}
+// Preserve existing public DTO import paths.
+export type {
+  PublicQuerySetSummary,
+  PublicQuerySet,
+  PublicSearchRunSummary,
+  PublicSearchRun,
+} from './publicApi.js';
 
 export type SearchRunStatus = 'running' | 'completed' | 'partial' | 'failed';
 

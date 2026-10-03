@@ -35,6 +35,7 @@ Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
 - Query Set summary and detail projections.
 - Search Run summary and detail projections.
 - Read-only OpenAPI contract.
+- Public API v1 uses the existing `/api/public/...` URLs. The contract's version and compatibility policy are defined in the OpenAPI description, with no URL migration required.
 
 ## Business Rules / Invariants
 
@@ -42,6 +43,9 @@ Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
 - Search Run lists/details require the Search Run's own `visibility === 'public'`, independently of its Query Set.
 - A public Search Run does not require its Query Set to exist or be public.
 - Public list endpoints return projections. Query Set summaries omit `rawYaml`; a Query Set detail includes it. Search Run list responses omit input YAML and video lists; details include the documented run/query/video fields.
+- Search Run lists use `{ items }`, newest `startedAt` first, default limit 50 and maximum 100. They offer no cursor or full-history enumeration guarantee.
+- Detail Video Results remain at `queryResults[].videos[]`, with required `videoId`, `url`, and string `title` (possibly empty). There is no flat `results` field or separate results endpoint. Optional properties may be omitted or null as specified in OpenAPI; consumers tolerate unknown added fields.
+- Internal record fields, Output YAML, persistence paths, per-query/video ordering, video uniqueness, and the identifier's encoding are not public guarantees. All existing fields documented in OpenAPI remain part of v1, including fields beyond the minimum needed by source-import consumers.
 - The current router allows 100 requests per IP per minute per process instance. This is not a distributed/global limit.
 
 ## Inputs
@@ -53,7 +57,7 @@ Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
 ## Outputs
 
 - JSON public DTOs described by OpenAPI.
-- 404 when a resource is absent or not public, 429 when the local limiter rejects a request, and service errors when Firestore reads fail.
+- 404 when a resource is absent or not public, 429 when the local limiter rejects a request, and 503 when authoritative Firestore reads fail. Prior cached public data does not replace those reads.
 
 ## Dependencies
 
@@ -65,11 +69,12 @@ Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
 ## Related Code
 
 - [Public route handlers and in-memory rate limit](../../../../server/publicApi.ts).
-- [Admin Firestore reads and public DTO projections](../../../../server/firestoreService.ts).
-- [Query Set publication and Search Run visibility controls](../../../../server/app.ts), [shared DTO types](../../../../src/types/index.ts), and [API documentation UI](../../../../src/components/ApiDocsView.tsx).
+- [Admin Firestore reads and visibility filtering](../../../../server/firestoreService.ts), [Search Run public mappers](../../../../server/publicApiMapper.ts), and [independent public DTO types](../../../../src/types/publicApi.ts).
+- [Query Set publication and Search Run visibility controls](../../../../server/app.ts) and [API documentation UI](../../../../src/components/ApiDocsView.tsx).
 - [OpenAPI specification](../../../../openapi/public-api.yaml).
 
 ## Related Specifications
 
 - The [OpenAPI 3.1 YAML](../../../../openapi/public-api.yaml) is the detailed machine-readable contract and remains authoritative for paths, parameters, schemas, and responses.
+- [Public contract tests](../../../../tests/publicApiContract.test.ts) validate the real anonymous router and service with fake authoritative storage; [mapper tests](../../../../tests/publicApiMapper.test.ts) protect projection boundaries. These tests do not establish live Firebase connectivity.
 - No BDD feature files or Public Read API ADRs were found.

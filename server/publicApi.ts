@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { FirestoreReadError, FirestoreService } from './firestoreService.js';
 
+export const PUBLIC_API_BASE_PATH = '/api/public';
+
 // Simple in-memory sliding window rate limiter (100 req/min per IP)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;

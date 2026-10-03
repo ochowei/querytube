@@ -10,20 +10,21 @@ src/
 ├── context/, firebase.ts   browser auth and Firebase setup
 ├── components/             feature views and presentation
 ├── utils/                  authenticated HTTP helper and YAML validation
-└── types/                  shared TypeScript models
+└── types/                  internal models and independent publicApi.ts DTOs
 
 server/
 ├── app.ts                  Express app, routes, auth and search orchestration
 ├── youtubeCredentials.ts   credential lifecycle, crypto, UID cache and REST storage
 ├── firestoreService.ts     shared persistence, public projections, and caches
 ├── publicApi.ts            anonymous public API router
+├── publicApiMapper.ts      explicit Search Run v1 projections
 ├── firebaseAdmin.ts        Admin SDK and runtime configuration
 ├── yamlValidator.ts        parsed YAML validation
 └── dev.ts                  local Vite/Express startup and listener
 
 api/index.ts                Vercel Function adapter
 openapi/                    published public HTTP contract
-tests/                      Node tests for app helpers, credential routes/SSE and docs
+tests/                      Node unit, credential routes/SSE, public contract and docs tests
 ```
 
 The source is organized by runtime and technical module, not one directory per bounded context. `server/app.ts` and `server/firestoreService.ts` currently span multiple logical responsibilities. `api/index.ts` and `server/dev.ts` are entrypoints around the same Express app rather than separate application implementations.
@@ -39,7 +40,7 @@ The statuses describe the current implementation boundary and are not quality sc
 | [Query Management](domain-view/contexts/query-management.md) | Validate YAML search definitions and manage saved Query Sets. | `src/utils/yamlValidator.ts`, `server/yamlValidator.ts`, `src/App.tsx`, `src/components/YamlEditor.tsx`, `src/components/SaveQuerySetModal.tsx`, `src/components/QueriesView.tsx`, `server/app.ts`, `server/firestoreService.ts`, `src/types/index.ts` | `MIXED` | Browser text parsing and server parsed-object validation are separate; route handlers live in `server/app.ts`; storage and public projections share `FirestoreService`. |
 | [YouTube Search](domain-view/contexts/youtube-search.md) | Execute YAML queries against YouTube and return JSON or SSE results. | `src/App.tsx`, `src/components/QueryStatusList.tsx`, `src/components/YamlViewer.tsx`, `src/components/VideoCardsPreview.tsx`, `src/utils/yamlValidator.ts`, `server/app.ts`, `server/yamlValidator.ts`, `server/firestoreService.ts` | `MIXED` | UI request/progress handling, validation, concurrency, YouTube calls, result mapping, and Search Run writes meet in `App.tsx` and `server/app.ts`. |
 | [Search History](domain-view/contexts/search-history.md) | Persist, list, load, update, and delete Search Runs and their nested outcomes/videos. | `src/App.tsx`, `src/components/HistoryView.tsx`, `src/components/SearchRunDetailModal.tsx`, `server/app.ts`, `server/firestoreService.ts`, `src/types/index.ts` | `MIXED` | Search execution creates and updates history directly; routes and persistence share broad modules; process-local caches sit beside Firestore-backed reads. |
-| [Public Read API](domain-view/contexts/public-read-api.md) | Serve anonymous projections for explicitly published Query Sets and Search Runs. | `server/publicApi.ts`, `server/firestoreService.ts`, `server/app.ts`, `openapi/public-api.yaml`, `src/components/QueriesView.tsx`, `src/components/HistoryView.tsx`, `src/components/ApiDocsView.tsx`, `src/types/index.ts` | `PARTIAL` | Anonymous routes have a dedicated router, but publication controls remain in private routes and projection/filter methods share `FirestoreService` with owner persistence. |
+| [Public Read API](domain-view/contexts/public-read-api.md) | Serve anonymous projections for explicitly published Query Sets and Search Runs. | `server/publicApi.ts`, `server/publicApiMapper.ts`, `server/firestoreService.ts`, `server/app.ts`, `openapi/public-api.yaml`, `src/components/QueriesView.tsx`, `src/components/HistoryView.tsx`, `src/components/ApiDocsView.tsx`, `src/types/publicApi.ts` | `PARTIAL` | Independent public DTOs and Search Run mappers isolate the wire shape; authoritative filtering still shares `FirestoreService` with owner persistence, and publication controls remain in private routes. |
 
 `ALIGNED` can describe a responsibility with a principally identifiable implementation boundary; `PARTIAL` a boundary that covers only part of the responsibility; `MIXED` responsibility spread across or combined within modules; and `LEGACY` a retained implementation not serving as the current owner. The current map uses `MIXED` and `PARTIAL`; no context is currently marked `ALIGNED` or `LEGACY`.
 
@@ -52,4 +53,5 @@ The statuses describe the current implementation boundary and are not quality sc
 - Search Run child-result and summary writes are awaited by the search route, but persistence helpers can catch and log Firestore failures. A completed JSON/SSE response therefore does not prove every history document was persisted.
 - The browser and server each have YAML validation code. This is a current source boundary; it does not establish that their accepted YAML rules are identical.
 - `openapi/public-api.yaml` is loaded by `server/app.ts` and exposed as `/openapi.json` and `/api-docs/`; the React `ApiDocsView` also fetches `/openapi.json`.
+- Public API v1 retains `/api/public` paths. Independent public DTOs in `src/types/publicApi.ts` do not derive from domain types; `src/types/index.ts` re-exports existing public type names for import compatibility. `FirestoreService` checks persisted visibility before calling the explicit Search Run mappers. Contract tests validate HTTP responses against the YAML and retain a baseline of established fields.
 - Domain-to-code mapping records where logical responsibilities live today. It does not imply that those responsibilities should become separate services, packages, directories, or deployment units.

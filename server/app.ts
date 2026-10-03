@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { load, dump } from 'js-yaml';
 import swaggerUi from 'swagger-ui-express';
 import { FirestoreReadError, FirestoreService, FirestoreWriteError } from './firestoreService.js';
-import { createPublicApiRouter } from './publicApi.js';
+import { createPublicApiRouter, PUBLIC_API_BASE_PATH } from './publicApi.js';
 import { configureUserYouTubeApiKey, getUserYouTubeApiKey, removeUserYouTubeApiKey } from './youtubeCredentials.js';
 import { validateParsedYaml } from './yamlValidator.js';
 import type { QueryConfig, YamlDefaults } from './yamlValidator.js';
@@ -100,7 +100,7 @@ if (openapiDocument) {
 }
 
 // Mount Public Read-Only API
-app.use('/api/public', createPublicApiRouter(firestoreService));
+app.use(PUBLIC_API_BASE_PATH, createPublicApiRouter(firestoreService));
 
 interface VideoResult {
   video_id: string;

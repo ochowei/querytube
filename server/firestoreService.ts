@@ -6,12 +6,10 @@ import {
   SearchRunDetails,
   QueryResultItem,
   StoredVideoItem,
-  PublicQuerySetSummary,
-  PublicQuerySet,
-  PublicSearchRunSummary,
-  PublicSearchRun,
   ResourceVisibility,
 } from '../src/types/index.js';
+import type { PublicQuerySetSummary, PublicQuerySet, PublicSearchRunSummary, PublicSearchRun } from '../src/types/publicApi.js';
+import { toPublicSearchRunSummary, toPublicSearchRun } from './publicApiMapper.js';
 
 interface FirestoreFieldString {
   stringValue: string;
@@ -578,20 +576,7 @@ export class FirestoreService {
     const sorted = matchedRuns.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
     const cappedLimit = Math.max(1, Math.min(100, limitCount));
 
-    return sorted.slice(0, cappedLimit).map((r) => ({
-      id: r.id,
-      querySetId: r.querySetId ?? null,
-      querySetName: r.querySetName ?? null,
-      status: r.status,
-      queryCount: r.queryCount,
-      successfulQueries: r.successfulQueries,
-      failedQueries: r.failedQueries,
-      totalResults: r.totalResults,
-      startedAt: r.startedAt,
-      completedAt: r.completedAt ?? null,
-      createdAt: r.createdAt,
-      visibility: 'public',
-    }));
+    return sorted.slice(0, cappedLimit).map(toPublicSearchRunSummary);
   }
 
   async getPublicSearchRunDetails(uid: string, runId: string): Promise<PublicSearchRun | null> {
@@ -606,45 +591,7 @@ export class FirestoreService {
       return null;
     }
 
-    // 3. Construct safe public search run DTO
-    return {
-      id: details.id,
-      querySetId: details.querySetId ?? null,
-      querySetName: details.querySetName ?? null,
-      status: details.status,
-      queryCount: details.queryCount,
-      successfulQueries: details.successfulQueries,
-      failedQueries: details.failedQueries,
-      totalResults: details.totalResults,
-      inputYaml: details.inputYaml,
-      startedAt: details.startedAt,
-      completedAt: details.completedAt ?? null,
-      createdAt: details.createdAt,
-      visibility: 'public',
-      queryResults: (details.queryResults || []).map((q) => ({
-        id: q.id,
-        sourceQueryId: q.sourceQueryId,
-        query: q.query,
-        relevanceLanguage: q.relevanceLanguage ?? null,
-        regionCode: q.regionCode ?? null,
-        status: q.status,
-        resultCount: q.resultCount,
-        errorCode: q.errorCode ?? null,
-        errorMessage: q.errorMessage ?? null,
-        startedAt: q.startedAt,
-        completedAt: q.completedAt,
-        videos: (q.videos || []).map((v) => ({
-          videoId: v.videoId,
-          title: v.title,
-          channelId: v.channelId,
-          channelTitle: v.channelTitle,
-          publishedAt: v.publishedAt,
-          description: v.description,
-          url: v.url,
-          thumbnailUrl: v.thumbnailUrl,
-        })),
-      })),
-    };
+    return toPublicSearchRun(details);
   }
 
   async deleteQuerySet(idToken: string, uid: string, querySetId: string): Promise<void> {

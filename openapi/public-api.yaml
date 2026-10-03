@@ -1,8 +1,54 @@
 openapi: 3.1.0
 info:
   title: QueryTube Public API
-  version: 1.0.0
-  description: Public Read API for accessing Public Query Sets and Public Search Runs explicitly shared by their owners. Search Run visibility is independent of Query Set publication.
+  version: 1.0.1
+  description: |
+    Public API v1 is the anonymous, read-only API at the existing /api/public/... paths.
+    This YAML is the source of truth for public wire paths, parameters, schemas,
+    responses, and compatibility policy. The contract version is not a URL prefix;
+    consumers do not need to migrate to /api/v1. Version 1.0.1 formalizes v1 and
+    corrects documentation to match existing responses, without changing wire behavior.
+
+    Owners explicitly share Public Query Sets and Public Search Runs. Search Run
+    visibility is independent of Query Set publication or continued existence.
+    Reads use current persisted visibility. Missing/private details return 404;
+    unavailable authoritative storage returns 503, without a cached-data fallback.
+    Sharing can be revoked, and a public run may still be running or have failed queries.
+    429 responses indicate rate limiting; the current per-process budget is not a
+    guarantee of a globally exact request allowance. Error message wording is not stable.
+
+    Consumer boundary:
+    - Run identifiers are opaque strings scoped by the owner userId; retain both.
+    - Lists return { items: [...] }, ordered by startedAt descending, capped by limit.
+      v1 has no cursor, next-page token, total count, or snapshot-consistency guarantee.
+    - Details contain id and queryResults[].videos[], not a flat results array.
+      Video Results provide videoId, url (YouTube watch URL), and title (a required
+      string, possibly empty). Consumers can deduplicate by videoId across queries.
+      Empty arrays are valid; order within queryResults/videos is not guaranteed.
+    - All schema-defined fields are public contract, including fields beyond this
+      minimum consumer subset. Optional fields may be absent or null only where
+      their schema permits it. Consumers must tolerate unknown added fields.
+    - Internal models, Firestore paths, Output YAML, ID encodings, and undocumented
+      properties are implementation details and are not public guarantees.
+
+    Compatibility policy:
+    - Adding optional response fields, endpoints, or optional query parameters is
+      normally compatible when existing requests and semantics remain unchanged.
+    - Removing/renaming fields or paths, changing types/nullability incompatibly,
+      making optional request fields required, making required response fields
+      optional, making optional fields required in the published schema, removing
+      enum values, restructuring responses, and changing endpoint/access/order/limit
+      semantics are breaking. Even optional response fields cannot be removed silently.
+    - Response enum additions require compatibility review because consumers may
+      exhaustively handle the existing values. Do not assume they are safe additions.
+    - Compatible additions increment the minor contract version; corrections that
+      preserve wire behavior increment the patch version. Breaking changes require
+      a new major contract and a separate OpenSpec change with migration guidance,
+      consumer impact review, and an explicit deprecation/support plan. Keep v1
+      available during migration; do not silently repurpose or redirect its URLs.
+      A separate versioned route may be introduced when a concrete breaking change
+      requires coexistence. No v2 infrastructure is required by this contract.
+security: []
 servers:
   - url: /
     description: Current host server
@@ -55,8 +101,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal server error.
+        '503':
+          description: Authoritative storage unavailable; cached data is not returned.
           content:
             application/json:
               schema:
@@ -119,8 +165,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal server error.
+        '503':
+          description: Authoritative storage unavailable; cached data is not returned.
           content:
             application/json:
               schema:
@@ -131,7 +177,7 @@ paths:
       tags:
         - Search Runs
       summary: List public Search Runs
-      description: Returns Public Search Run summaries for the specified user, ordered newest first. Search Run visibility is independent of Query Set publication. Does not return input YAML or Video Result lists. If querySetId is provided, only Public Search Runs associated with that Query Set are returned; the Query Set need not still exist or be public.
+      description: Returns Public Search Run summaries for the specified user, ordered by startedAt descending, with no cursor or next-page token. Search Run visibility is independent of Query Set publication. Does not return input YAML or Video Result lists. If querySetId is provided, only Public Search Runs associated with that Query Set are returned; the Query Set need not still exist or be public.
       operationId: listPublicSearchRuns
       parameters:
         - name: userId
@@ -144,7 +190,7 @@ paths:
         - name: limit
           in: query
           required: false
-          description: Maximum number of Search Runs to return (1-100, default 50).
+          description: Maximum number of Search Runs to return (1-100, default 50). Existing behavior parses the integer prefix, clamps to 1-100, and uses 50 when parsing fails or the value is empty.
           schema:
             type: integer
             default: 50
@@ -198,8 +244,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal server error.
+        '503':
+          description: Authoritative storage unavailable; cached data is not returned.
           content:
             application/json:
               schema:
@@ -290,8 +336,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal server error.
+        '503':
+          description: Authoritative storage unavailable; cached data is not returned.
           content:
             application/json:
               schema:
@@ -322,7 +368,7 @@ paths:
         - name: limit
           in: query
           required: false
-          description: Maximum number of Search Runs to return (1-100, default 50).
+          description: Maximum number of Search Runs to return (1-100, default 50). Existing behavior parses the integer prefix, clamps to 1-100, and uses 50 when parsing fails or the value is empty.
           schema:
             type: integer
             default: 50
@@ -355,8 +401,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal server error.
+        '503':
+          description: Authoritative storage unavailable; cached data is not returned.
           content:
             application/json:
               schema:
@@ -437,14 +483,12 @@ components:
       properties:
         id:
           type: string
-          description: Unique identifier of the Search Run.
+          description: Opaque Search Run identifier scoped by the owner userId; retain both when referring to a run.
         querySetId:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Historical association with a source Query Set, which need not still exist.
         querySetName:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Name of the associated Query Set at run time, which need not match its current name.
         status:
           type: string
@@ -467,9 +511,8 @@ components:
           format: date-time
           description: ISO timestamp when search execution started.
         completedAt:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
           description: ISO timestamp when search execution finished.
         createdAt:
           type: string
@@ -498,14 +541,12 @@ components:
       properties:
         id:
           type: string
-          description: Unique identifier of the Search Run.
+          description: Opaque Search Run identifier scoped by the owner userId; retain both when referring to a run.
         querySetId:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Historical association with a source Query Set, which need not still exist.
         querySetName:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Name of the associated Query Set at run time, which need not match its current name.
         status:
           type: string
@@ -531,9 +572,8 @@ components:
           format: date-time
           description: ISO timestamp when search execution started.
         completedAt:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
           description: ISO timestamp when search execution finished.
         createdAt:
           type: string
@@ -546,7 +586,7 @@ components:
           example: public
         queryResults:
           type: array
-          description: Query Results within this Search Run, including their Video Results or failure information.
+          description: Recorded Query Results and their Video Results or failure information. May be empty; array order and video uniqueness across queries are not guaranteed.
           items:
             $ref: '#/components/schemas/QueryResult'
 
@@ -572,12 +612,10 @@ components:
           type: string
           description: Executed query string.
         relevanceLanguage:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: ISO 639-1 language code if specified.
         regionCode:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: ISO 3166-1 alpha-2 country code if specified.
         status:
           type: string
@@ -587,21 +625,23 @@ components:
           type: integer
           description: Number of Video Results in this Query Result.
         errorCode:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Error identifier if query failed.
         errorMessage:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Error details if query failed.
         startedAt:
           type: string
-          format: date-time
-          description: ISO timestamp when this individual query began.
+          anyOf:
+            - const: ""
+            - format: date-time
+          description: ISO timestamp when this individual query began; empty string for legacy records without a timestamp.
         completedAt:
           type: string
-          format: date-time
-          description: ISO timestamp when this individual query finished.
+          anyOf:
+            - const: ""
+            - format: date-time
+          description: ISO timestamp when this individual query finished; empty string for legacy records without a timestamp.
         videos:
           type: array
           description: Video Results included in this Query Result.
@@ -625,7 +665,7 @@ components:
           description: YouTube video ID.
         title:
           type: string
-          description: Video title with decoded HTML entities.
+          description: Recorded video title with decoded HTML entities; empty string when unavailable.
         channelId:
           type: string
           description: YouTube channel ID.
@@ -634,8 +674,10 @@ components:
           description: YouTube channel title.
         publishedAt:
           type: string
-          format: date-time
-          description: Video publication timestamp.
+          anyOf:
+            - const: ""
+            - format: date-time
+          description: Video publication timestamp; empty string when unavailable.
         description:
           type: string
           description: Video snippet description.
@@ -645,8 +687,10 @@ components:
           description: Direct link to watch the video on YouTube.
         thumbnailUrl:
           type: string
-          format: uri
-          description: Video thumbnail image URL.
+          anyOf:
+            - const: ""
+            - format: uri
+          description: Video thumbnail image URL; empty string when unavailable.
 
     ErrorResponse:
       type: object

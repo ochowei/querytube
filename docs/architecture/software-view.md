@@ -66,6 +66,7 @@ flowchart LR
     Credentials[server/youtubeCredentials.ts<br/>key verification, crypto, per-UID cache<br/>and credential persistence]
     Validator[server/yamlValidator.ts<br/>parsed-object validator]
     Public[server/publicApi.ts<br/>anonymous router and per-process rate limit]
+    Projection[server/publicApiMapper.ts<br/>explicit Search Run public DTO mapping]
     Store[FirestoreService<br/>Query Sets, Search Runs, query results,<br/>videos, public projections, caches and conversion]
     Admin[server/firebaseAdmin.ts<br/>Firebase Admin Auth / Firestore setup]
   end
@@ -83,6 +84,7 @@ flowchart LR
   App --> Admin
   Admin --> Store
   Public --> Store
+  Store --> Projection
   Admin -->|Firebase Admin Auth| FirebaseAuth
   App -->|Search requests| YouTube
   Credentials -->|Key verification| YouTube
@@ -90,6 +92,6 @@ flowchart LR
   Store -->|Admin SDK reads and user-token REST calls| Firestore
 ```
 
-`api/index.ts` is the Vercel adapter; local startup is described in the Deployment View. `server/app.ts` combines route registration, authentication, HTTP handling, search execution, and Search Run orchestration. It delegates key lookup, configuration, and removal to `server/youtubeCredentials.ts`, which owns verification, encryption/decryption, the per-UID process cache, and user-token Firestore credential access. `FirestoreService` combines Query Set and Search Run persistence, public reads/projections, data conversion, and process-local caches. The public router is a separate source module, while publication changes remain in `server/app.ts`.
+`api/index.ts` is the Vercel adapter; local startup is described in the Deployment View. `server/app.ts` combines route registration, authentication, HTTP handling, search execution, and Search Run orchestration. It delegates key lookup, configuration, and removal to `server/youtubeCredentials.ts`, which owns verification, encryption/decryption, the per-UID process cache, and user-token Firestore credential access. `FirestoreService` combines Query Set and Search Run persistence, authoritative public reads, data conversion, and process-local caches. Search Run projections use `server/publicApiMapper.ts` and independent DTOs in `src/types/publicApi.ts`; Query Set projections remain in `FirestoreService`. The public router is a separate source module, while publication changes remain in `server/app.ts`.
 
 These are current implementation components and responsibilities. The logical responsibilities named in the [Domain View](domain-view/README.md) are not all separate components: the current code does not contain distinct `QueryService`, `SearchService`, or `HistoryService` modules.
