@@ -20,7 +20,7 @@ External consumers such as notebooklm-yt need an explicit URL version for the st
 
 ### Modified Capabilities
 
-None. Canonical specifications are still empty. This change builds on the completed stable contract change without rewriting its historical spec delta or archiving either change.
+- `public-search-runs`: Clarify that retained unversioned paths are backward-compatible aliases of the preferred explicit v1 URLs. This canonical capability is established by archiving the completed stable contract dependency first; the original implementation baseline had no canonical specifications. Its historical delta remains unchanged.
 
 ## Impact
 

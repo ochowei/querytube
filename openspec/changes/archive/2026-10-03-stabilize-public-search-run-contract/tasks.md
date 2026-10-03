@@ -11,7 +11,7 @@
 - [x] 2.1 Run typecheck/lint, all unit/contract tests, application build, documentation build/link check, and strict OpenSpec validation; record outcomes and any unavailable live Firebase validation.
 - [x] 2.2 Review the final diff for unchanged routes/JSON/access semantics and excluded scope; verify the consumer extraction example and report stable fields, limitations, and future breaking-change workflow without archiving this change.
 
-## Verification evidence
+## Implementation verification evidence (before integration)
 
 - Baseline: local `main` was fast-forwarded from `b286782` to fetched `origin/main` at `8b92d32`; overlapping app/documentation changes preserve the upstream credential extraction. No credential/authentication modules or external repositories were modified.
 - `npm run lint` passed the repository's `tsc --noEmit` typecheck. `npm test` passed 62/62 tests with no skips, including 9 new schema/HTTP contract tests and 2 mapper tests. The final optional-field/nested-shape baseline additions were rechecked with all 9 contract tests and typecheck passing.
@@ -21,3 +21,13 @@
 - `openspec validate --all --strict` passed all 3 active changes. `git diff --check` passed. The diff preserves all public route strings, operation IDs, existing selected fields, storage paths, and visibility/limit semantics; documentation corrects existing wire drift rather than changing responses.
 - The HTTP test extracts `{ videoId, url, title }` via `queryResults.flatMap(...)` and confirms the stable run `id`. The authoritative YAML defines compatibility rules, opaque owner-scoped IDs, no cursor guarantee, empty/duplicate sources, and future major-contract coexistence/deprecation requirements.
 - Live Firebase/Firestore, production visibility against actual records, and deployment checks were not run; no existing repository tests were skipped. The completed change remains unarchived, with its delta separate from the still-empty canonical spec collection.
+
+## Post-integration closure (2026-10-03)
+
+- [x] 3.1 Confirm implementation is integrated on main at `fc24013` and its dependent URL versioning is integrated at `2a3472e`; archive this completed change through `openspec archive stabilize-public-search-run-contract --yes` with validation enabled and without skipping spec synchronization.
+- [x] 3.2 Establish canonical `public-search-runs` with all six stable contract requirements; preserve this historical delta while the subsequent versioning archive modifies the canonical path requirement to document preferred explicit v1 URLs and compatible legacy aliases.
+- [x] 3.3 Verify the final canonical specs and documentation navigation/links alongside the dependent versioning archive.
+
+The earlier implementation verification notes describe the pre-integration state. This change is now archived under `2026-10-03-stabilize-public-search-run-contract`; the canonical specification owns current requirements. The archive adds no runtime, OpenAPI, Firebase configuration, or response changes.
+
+Closure verification: strict OpenSpec validation passed both canonical specs and both remaining active changes (4/4). The three documentation tests passed without skips. Documentation build/link validation passed 42 HTML pages and rendered both canonical specifications. Inventory checks confirmed both completed changes appear in archive/history rather than active changes, all 11 canonical requirements are present, legacy compatibility and preferred v1 wording agree, and no generated Purpose placeholder remains. The final diff is confined to OpenSpec files.

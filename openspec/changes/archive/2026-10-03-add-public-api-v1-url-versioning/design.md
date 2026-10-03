@@ -42,3 +42,7 @@ Extend existing real-router/real-service tests with fake Admin storage to compar
 ## Migration Plan
 
 Deploy through the normal application workflow after validation. Consumers can adopt v1 incrementally; legacy links continue returning the same JSON directly. No data/configuration migration or removal date is needed. Rollback reverts additive routing/docs only. Leave this change unarchived for review and normal integration.
+
+## Post-integration specification synchronization
+
+Both implementations are now on main (`fc24013` for the stable contract and `2a3472e` for URL versioning), and implementation validation is complete. Close their lifecycle in dependency order: archive the stable contract to establish `public-search-runs`, then archive this change to establish `public-api-url-versioning` and modify the existing path requirement in `public-search-runs`. That modification explicitly calls the retained unversioned paths v1 aliases while recommending explicit v1 URLs for new consumers. It preserves the original requirement name and existing-client scenario, and does not require consumers to migrate or change runtime behavior. The earlier baseline and pre-integration validation notes remain historical records; pending unrelated changes remain active.
