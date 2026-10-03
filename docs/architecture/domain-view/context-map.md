@@ -35,7 +35,7 @@ flowchart LR
   Queries --> Firestore
   History --> Firestore
   Public -->|authoritative public reads| Firestore
-  Consumer -->|GET /api/public/...| Public
+  Consumer -->|GET /api/v1/public/... or legacy /api/public/...| Public
 ```
 
 ## Relationships

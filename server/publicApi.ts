@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { FirestoreReadError, FirestoreService } from './firestoreService.js';
 
 export const PUBLIC_API_BASE_PATH = '/api/public';
+export const PUBLIC_API_V1_BASE_PATH = '/api/v1/public';
 
 // Simple in-memory sliding window rate limiter (100 req/min per IP)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -82,8 +83,21 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
     }
   });
 
+  registerPublicSearchRunRoutes(router, firestoreService);
+  return router;
+}
+
+export function createPublicApiV1Router(firestoreService: FirestoreService): Router {
+  const router = Router();
+  router.use(publicApiRateLimiter);
+  registerPublicSearchRunRoutes(router, firestoreService);
+  return router;
+}
+
+// Both prefixes use these handlers, the same service/mappers, and one IP budget.
+function registerPublicSearchRunRoutes(router: Router, firestoreService: FirestoreService): void {
   /**
-   * GET /api/public/users/:userId/search-runs
+   * GET /users/:userId/search-runs (legacy and v1)
    * List public search runs for a user (optionally filtered by querySetId)
    * Independent from Query Set publication
    */
@@ -110,7 +124,7 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
   });
 
   /**
-   * GET /api/public/users/:userId/search-runs/:runId
+   * GET /users/:userId/search-runs/:runId (legacy and v1)
    * Get search run details for a public Search Run
    * Independent from Query Set publication
    */
@@ -136,8 +150,8 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
   });
 
   /**
-   * GET /api/public/users/:userId/query-sets/:querySetId/search-runs
-   * Backward-compatible convenience endpoint equivalent to /api/public/users/:userId/search-runs?querySetId=:querySetId
+   * GET /users/:userId/query-sets/:querySetId/search-runs (legacy and v1)
+   * Convenience endpoint equivalent to /users/:userId/search-runs?querySetId=:querySetId
    */
   router.get('/users/:userId/query-sets/:querySetId/search-runs', async (req: Request, res: Response) => {
     const { userId, querySetId } = req.params;
@@ -157,6 +171,4 @@ export function createPublicApiRouter(firestoreService: FirestoreService): Route
       res.status(status).json({ error: 'Service Unavailable', message: 'Failed to retrieve search runs' });
     }
   });
-
-  return router;
 }

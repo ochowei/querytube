@@ -35,7 +35,8 @@ Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
 - Query Set summary and detail projections.
 - Search Run summary and detail projections.
 - Read-only OpenAPI contract.
-- Public API v1 uses the existing `/api/public/...` URLs. The contract's version and compatibility policy are defined in the OpenAPI description, with no URL migration required.
+- Public API v1 Search Run operations use `/api/v1/public/...`; corresponding `/api/public/...` paths remain supported deprecated aliases with identical JSON and access semantics. Query Set definition list/detail remain at their existing unversioned URLs. OpenAPI defines the contract and compatibility policy.
+- New external Search Run consumers should use v1 URLs. No legacy removal date is scheduled. Future removal requires a separate OpenSpec change, migration guidance and period, and explicit release/deprecation notice; breaking contract changes require a new major URL version, keeping v1 available during migration.
 
 ## Business Rules / Invariants
 
@@ -46,7 +47,7 @@ Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
 - Search Run lists use `{ items }`, newest `startedAt` first, default limit 50 and maximum 100. They offer no cursor or full-history enumeration guarantee.
 - Detail Video Results remain at `queryResults[].videos[]`, with required `videoId`, `url`, and string `title` (possibly empty). There is no flat `results` field or separate results endpoint. Optional properties may be omitted or null as specified in OpenAPI; consumers tolerate unknown added fields.
 - Internal record fields, Output YAML, persistence paths, per-query/video ordering, video uniqueness, and the identifier's encoding are not public guarantees. All existing fields documented in OpenAPI remain part of v1, including fields beyond the minimum needed by source-import consumers.
-- The current router allows 100 requests per IP per minute per process instance. This is not a distributed/global limit.
+- The routers share one 100-request-per-IP-per-minute budget per process instance across legacy and v1 prefixes. This is not a distributed/global limit.
 
 ## Inputs
 

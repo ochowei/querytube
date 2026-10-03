@@ -4,8 +4,9 @@ import test from 'node:test';
 import express from 'express';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { toPublicSearchRun } from '../server/publicApiMapper.ts';
-import { createPublicApiRouter, PUBLIC_API_BASE_PATH } from '../server/publicApi.ts';
+import { toPublicSearchRun, toPublicSearchRunSummary } from '../server/publicApiMapper.ts';
+import { FirestoreService } from '../server/firestoreService.ts';
+import { createPublicApiRouter, createPublicApiV1Router, PUBLIC_API_BASE_PATH, PUBLIC_API_V1_BASE_PATH } from '../server/publicApi.ts';
 import { runFixture } from './helpers/publicApiFixture.ts';
 import { checkSchema, contract, responseSchema, validate } from './helpers/publicApiSchema.ts';
 import { fakePublicStore } from './helpers/publicApiFirestore.ts';
@@ -14,7 +15,21 @@ const userPath = '/api/public/users/{userId}';
 const listPath = `${userPath}/search-runs`;
 const detailPath = `${listPath}/{runId}`;
 const conveniencePath = `${userPath}/query-sets/{querySetId}/search-runs`;
+const searchRunPaths = [listPath, detailPath, conveniencePath];
+const v1Path = (path: string) => path.replace('/api/public/', '/api/v1/public/');
 let nextClient = 0;
+
+async function listen(t: test.TestContext, app: ReturnType<typeof express>) {
+  const server = await new Promise<Server>((resolve, reject) => {
+    const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
+    listener.once('error', reject);
+  });
+  t.after(() => new Promise<void>((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+    server.closeAllConnections();
+  }));
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
 
 async function setupHttp(t: test.TestContext) {
   const client = ++nextClient;
@@ -24,19 +39,13 @@ async function setupHttp(t: test.TestContext) {
   // Give each fixture a distinct limiter client; production limiter itself is unchanged.
   app.set('trust proxy', 'loopback');
   app.use(PUBLIC_API_BASE_PATH, createPublicApiRouter(store.service));
-  const server = await new Promise<Server>((resolve, reject) => {
-    const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
-    listener.once('error', reject);
-  });
-  t.after(() => new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
-    server.closeAllConnections();
-  }));
+  app.use(PUBLIC_API_V1_BASE_PATH, createPublicApiV1Router(store.service));
+  const baseUrl = await listen(t, app);
   t.mock.method(console, 'warn', () => {});
-  async function request(schemaPath: string, options: { id?: string; querySetId?: string; query?: string; status?: number } = {}) {
-    const path = schemaPath.replace('{userId}', uid).replace('{runId}', options.id ?? runFixture.id)
+  async function request(schemaPath: string, options: { userId?: string; id?: string; querySetId?: string; query?: string; status?: number } = {}) {
+    const path = schemaPath.replace('{userId}', options.userId ?? uid).replace('{runId}', options.id ?? runFixture.id)
       .replace('{querySetId}', options.querySetId ?? 'deleted-set');
-    const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}${path}${options.query ?? ''}`, {
+    const response = await fetch(`${baseUrl}${path}${options.query ?? ''}`, {
       headers: { 'X-Forwarded-For': `192.0.2.${client}` }, // No bearer token.
     });
     assert.equal(response.status, options.status ?? 200, `GET ${path}`);
@@ -45,11 +54,20 @@ async function setupHttp(t: test.TestContext) {
     validate(responseSchema(schemaPath, response.status), body);
     return body;
   }
-  return { ...store, request };
+  async function requestBoth(schemaPath: string, options: Parameters<typeof request>[1] = {}) {
+    assert.ok(searchRunPaths.includes(schemaPath));
+    const legacy = await request(schemaPath, options);
+    const versioned = await request(v1Path(schemaPath), options);
+    // Compare current alias responses, not a snapshot of incidental fixture values.
+    assert.deepEqual(versioned, legacy, `Legacy/v1 mismatch: ${schemaPath}`);
+    return versioned;
+  }
+  return { ...store, request, requestBoth };
 }
 
 test('v1 preserves established paths, operation IDs, and consumer field guarantees', () => {
   assert.equal(PUBLIC_API_BASE_PATH, '/api/public');
+  assert.equal(PUBLIC_API_V1_BASE_PATH, '/api/v1/public');
   assert.equal(contract.openapi, '3.1.0');
   assert.match(contract.info.version, /^1\./);
   assert.deepEqual(contract.security, []);
@@ -61,6 +79,8 @@ test('v1 preserves established paths, operation IDs, and consumer field guarante
   // without importing app.ts (which initializes Firebase and unrelated auth).
   assert.match(readFileSync(new URL('../server/app.ts', import.meta.url), 'utf8'),
     /app\.use\(PUBLIC_API_BASE_PATH, createPublicApiRouter\(firestoreService\)\)/);
+  assert.match(readFileSync(new URL('../server/app.ts', import.meta.url), 'utf8'),
+    /app\.use\(PUBLIC_API_V1_BASE_PATH, createPublicApiV1Router\(firestoreService\)\)/);
   const schemas = contract.components.schemas;
   for (const [name, required] of Object.entries({
     PublicSearchRunSummary: ['id', 'status', 'queryCount', 'successfulQueries', 'failedQueries', 'totalResults', 'startedAt', 'createdAt', 'visibility'],
@@ -93,6 +113,54 @@ test('v1 preserves established paths, operation IDs, and consumer field guarante
   const limit = contract.paths[listPath].get.parameters.find((p: any) => p.name === 'limit');
   assert.equal(limit.required, false);
   assert.deepEqual([limit.schema.default, limit.schema.minimum, limit.schema.maximum], [50, 1, 100]);
+});
+
+test('OpenAPI publishes preferred v1 paths and deprecated aliases with equivalent parameters/responses', () => {
+  const operationIds = Object.values<any>(contract.paths).map((item) => item.get.operationId);
+  assert.equal(new Set(operationIds).size, operationIds.length, 'Operation IDs must remain unique');
+  for (const path of searchRunPaths) {
+    const legacy = contract.paths[path].get;
+    const versioned = contract.paths[v1Path(path)].get;
+    assert.equal(legacy.deprecated, true);
+    assert.notEqual(versioned.deprecated, true);
+    assert.equal(versioned.operationId, `${legacy.operationId}V1`);
+    assert.deepEqual(versioned.parameters, legacy.parameters);
+    assert.deepEqual(versioned.responses, legacy.responses);
+  }
+  for (const path of [`${userPath}/query-sets`, `${userPath}/query-sets/{querySetId}`]) {
+    assert.notEqual(contract.paths[path].get.deprecated, true);
+    assert.equal(contract.paths[v1Path(path)], undefined, 'Query Set definition versioning is outside this change');
+  }
+  assert.match(contract.info.description, /no removal date is scheduled/i);
+  assert.match(contract.info.description, /new major URL version/);
+});
+
+test('production app mounts both prefixes and serves the same updated contract in OpenAPI JSON and Swagger', async (t) => {
+  // Initialize the real app normally; replace storage reads, never Firebase credentials.
+  const { default: app } = await import('../server/app.ts');
+  t.mock.method(FirestoreService.prototype, 'getPublicSearchRuns', async () => [toPublicSearchRunSummary(runFixture)]);
+  t.mock.method(FirestoreService.prototype, 'getPublicSearchRunDetails', async () => toPublicSearchRun(runFixture));
+  const baseUrl = await listen(t, app);
+  for (const legacy of searchRunPaths) {
+    for (const path of [legacy, v1Path(legacy)]) {
+      const concrete = path.replace('{userId}', 'production-mount-test').replace('{runId}', runFixture.id)
+        .replace('{querySetId}', 'deleted-set');
+      const response = await fetch(`${baseUrl}${concrete}`);
+      assert.equal(response.status, 200);
+      validate(responseSchema(path), await response.json());
+    }
+  }
+  const json = await fetch(`${baseUrl}/openapi.json`);
+  assert.equal(json.status, 200);
+  assert.deepEqual(await json.json(), contract, 'JSON documentation must serve the authoritative YAML');
+  const swagger = await fetch(`${baseUrl}/api-docs/`);
+  assert.equal(swagger.status, 200);
+  assert.match(await swagger.text(), /swagger-ui-init\.js/);
+  const init = await fetch(`${baseUrl}/api-docs/swagger-ui-init.js`);
+  assert.equal(init.status, 200);
+  const source = await init.text();
+  for (const path of searchRunPaths) assert.ok(source.includes(v1Path(path)), `Swagger missing ${v1Path(path)}`);
+  assert.match(source, /"deprecated": true/);
 });
 
 test('all OpenAPI schemas, refs, and response examples use validated vocabulary', () => {
@@ -143,7 +211,7 @@ test('legacy empty metadata and empty results remain valid without weakening pop
 });
 
 test('anonymous HTTP detail exposes stable YouTube sources and handles legacy URL/title defaults', async (t) => {
-  const { request, records, user } = await setupHttp(t);
+  const { requestBoth: request, records, user } = await setupHttp(t);
   const detail = await request(detailPath);
   assert.equal(detail.id, runFixture.id);
   const sources = detail.queryResults.flatMap((q: any) => q.videos.map(({ videoId, url, title }: any) => ({ videoId, url, title })));
@@ -162,7 +230,7 @@ test('anonymous HTTP detail exposes stable YouTube sources and handles legacy UR
 });
 
 test('HTTP lists preserve cap/default/parsing/order/filter and convenience semantics without cursors', async (t) => {
-  const { request, addRun, reads } = await setupHttp(t);
+  const { requestBoth: request, addRun, reads } = await setupHttp(t);
   for (let i = 0; i < 105; i++) {
     addRun(`run-${i}`, { startedAt: new Date(Date.UTC(2026, 9, 2, 0, i)).toISOString(), querySetId: 'private-set' });
   }
@@ -189,22 +257,39 @@ test('HTTP lists preserve cap/default/parsing/order/filter and convenience seman
   assert.deepEqual(convenience, filtered);
   const privateAssociation = await request(listPath, { query: '?querySetId=private-set&limit=2' });
   assert.deepEqual(privateAssociation, await request(conveniencePath, { querySetId: 'private-set', query: '?limit=2' }));
+  const privateSetDetail = await request(detailPath, { id: 'run-104' });
+  assert.equal(privateSetDetail.querySetId, 'private-set');
   assert.deepEqual((await request(listPath, { query: '?querySetId=unknown-set' })).items, []);
+  assert.deepEqual((await request(conveniencePath, { querySetId: 'unknown-set' })).items, []);
+  // Check the convenience path's limit parser through both prefixes as well.
+  for (const [query, count] of [['?limit=invalid', 50], ['?limit=0', 1], ['?limit=999', 100], ['?limit=2suffix', 2]] as const) {
+    assert.equal((await request(conveniencePath, { querySetId: 'private-set', query })).items.length, count);
+  }
   assert.ok(reads.every((path) => !path.includes('/querySets')), 'Search Run visibility must not consult Query Set publication');
 });
 
 test('HTTP reads honor current visibility, missing records, and storage failure after cached reads', async (t) => {
-  const { request, records, user, setUnavailable } = await setupHttp(t);
-  await request(detailPath);
-  await request(listPath);
+  const { request, requestBoth, records, user, addRun, setUnavailable } = await setupHttp(t);
+  await requestBoth(detailPath);
+  await requestBoth(listPath);
+  await requestBoth(conveniencePath);
   records.get(`${user}/searchRuns/${runFixture.id}`)!.visibility = 'private';
-  await request(detailPath, { status: 404 });
-  assert.deepEqual((await request(listPath)).items, []);
-  await request(detailPath, { id: 'missing-run', status: 404 });
+  await requestBoth(detailPath, { status: 404 });
+  assert.deepEqual((await requestBoth(listPath)).items, []);
+  assert.deepEqual((await requestBoth(conveniencePath)).items, []);
+  await requestBoth(detailPath, { id: 'missing-run', status: 404 });
+  addRun('unset-visibility', { visibility: undefined });
+  await requestBoth(detailPath, { id: 'unset-visibility', status: 404 });
+  await requestBoth(detailPath, { userId: 'absent-owner', status: 404 });
+  assert.deepEqual((await requestBoth(listPath, { userId: 'absent-owner' })).items, []);
+  assert.deepEqual((await requestBoth(conveniencePath, { userId: 'absent-owner' })).items, []);
   records.get(`${user}/searchRuns/${runFixture.id}`)!.visibility = 'public';
-  await request(detailPath);
+  await requestBoth(detailPath);
+  await requestBoth(listPath);
+  await requestBoth(conveniencePath);
   setUnavailable();
-  for (const path of [detailPath, listPath, conveniencePath, `${userPath}/query-sets`, `${userPath}/query-sets/{querySetId}`]) {
+  for (const path of searchRunPaths) await requestBoth(path, { status: 503 });
+  for (const path of [`${userPath}/query-sets`, `${userPath}/query-sets/{querySetId}`]) {
     await request(path, { querySetId: 'public-set', status: 503 });
   }
 });
@@ -222,8 +307,13 @@ test('existing Query Set public paths still match OpenAPI and do not expose priv
   }
 });
 
-test('HTTP limiter rejects requests with the documented 429 error response', async (t) => {
-  const { request } = await setupHttp(t);
-  for (let i = 0; i < 100; i++) await request(listPath);
-  await request(listPath, { status: 429 });
+test('HTTP legacy and v1 share one limiter budget and every Search Run route returns equivalent 429', async (t) => {
+  const { request, requestBoth, reads } = await setupHttp(t);
+  for (let i = 0; i < 100; i++) {
+    const path = searchRunPaths[i % searchRunPaths.length];
+    await request(i % 2 ? v1Path(path) : path);
+  }
+  const readsBeforeLimit = reads.length;
+  for (const path of searchRunPaths) await requestBoth(path, { status: 429 });
+  assert.equal(reads.length, readsBeforeLimit, 'Rejected requests must not reach storage');
 });

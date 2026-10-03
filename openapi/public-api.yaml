@@ -1,13 +1,28 @@
 openapi: 3.1.0
 info:
   title: QueryTube Public API
-  version: 1.0.1
+  version: 1.1.0
   description: |
-    Public API v1 is the anonymous, read-only API at the existing /api/public/... paths.
+    Public API v1 is the current anonymous, read-only Search Run contract at
+    /api/v1/public/... . New external Search Run consumers should use these URLs.
     This YAML is the source of truth for public wire paths, parameters, schemas,
-    responses, and compatibility policy. The contract version is not a URL prefix;
-    consumers do not need to migrate to /api/v1. Version 1.0.1 formalizes v1 and
-    corrects documentation to match existing responses, without changing wire behavior.
+    responses, and compatibility policy. Version 1.1.0 adds explicit v1 URLs while
+    preserving the established JSON contract and access semantics.
+
+    Legacy Search Run /api/public/... paths remain supported backward-compatible
+    aliases with identical parameters, responses, and a shared rate-limit budget.
+    Their deprecated metadata is documentation only: no redirect or removal occurs.
+    Query Set definition list/detail paths remain at /api/public/... and are outside
+    this URL migration.
+
+    Deprecation policy:
+    - New external Search Run consumers, including notebooklm-yt, should use
+      /api/v1/public/users/{userId}/search-runs and its /{runId} detail path.
+    - Legacy Search Run aliases remain compatible; no removal date is scheduled.
+    - Any future removal requires a separate OpenSpec change, migration guidance
+      and period, and an explicit release/deprecation notice.
+    - Breaking contract changes require a new major URL version rather than
+      modifying v1 incompatibly. Keep v1 available during the migration period.
 
     Owners explicitly share Public Query Sets and Public Search Runs. Search Run
     visibility is independent of Query Set publication or continued existence.
@@ -46,8 +61,8 @@ info:
       a new major contract and a separate OpenSpec change with migration guidance,
       consumer impact review, and an explicit deprecation/support plan. Keep v1
       available during migration; do not silently repurpose or redirect its URLs.
-      A separate versioned route may be introduced when a concrete breaking change
-      requires coexistence. No v2 infrastructure is required by this contract.
+      Future major versions use separate URL prefixes for coexistence. No v2
+      infrastructure is required by this contract.
 security: []
 servers:
   - url: /
@@ -172,12 +187,249 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/public/users/{userId}/search-runs:
+  /api/v1/public/users/{userId}/search-runs:
     get:
       tags:
         - Search Runs
       summary: List public Search Runs
       description: Returns Public Search Run summaries for the specified user, ordered by startedAt descending, with no cursor or next-page token. Search Run visibility is independent of Query Set publication. Does not return input YAML or Video Result lists. If querySetId is provided, only Public Search Runs associated with that Query Set are returned; the Query Set need not still exist or be public.
+      operationId: listPublicSearchRunsV1
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The Firebase UID of the resource owner.
+          schema:
+            type: string
+          example: cabeceowei-uid-123
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of Search Runs to return (1-100, default 50). Existing behavior parses the integer prefix, clamps to 1-100, and uses 50 when parsing fails or the value is empty.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+          example: 50
+        - name: querySetId
+          in: query
+          required: false
+          description: Optional filter to restrict results to search runs originating from a specific Query Set.
+          schema:
+            type: string
+          example: qs_1711892019_abc12
+      responses:
+        '200':
+          description: Successfully retrieved list of public search runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicSearchRunSummary'
+              example:
+                items:
+                  - id: run_1711893000_xyz78
+                    querySetId: qs_1711892019_abc12
+                    querySetName: WoW Forever Multilingual
+                    status: completed
+                    queryCount: 18
+                    successfulQueries: 18
+                    failedQueries: 0
+                    totalResults: 126
+                    startedAt: '2026-10-01T02:10:00.000Z'
+                    completedAt: '2026-10-01T02:10:15.000Z'
+                    createdAt: '2026-10-01T02:10:00.000Z'
+                    visibility: public
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Authoritative storage unavailable; cached data is not returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/public/users/{userId}/search-runs/{runId}:
+    get:
+      tags:
+        - Search Runs
+      summary: Get Public Search Run details
+      description: Returns the Public Search Run, including its executed YAML Search Definition, Query Results, and Video Results. The Search Run itself must have public visibility, independently of Query Set publication or continued existence.
+      operationId: getPublicSearchRunDetailsV1
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The Firebase UID of the resource owner.
+          schema:
+            type: string
+          example: cabeceowei-uid-123
+        - name: runId
+          in: path
+          required: true
+          description: The unique identifier of the search run.
+          schema:
+            type: string
+          example: run_1711893000_xyz78
+      responses:
+        '200':
+          description: Successfully retrieved public search run details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSearchRun'
+              example:
+                id: run_1711893000_xyz78
+                querySetId: qs_1711892019_abc12
+                querySetName: WoW Forever Multilingual
+                status: completed
+                queryCount: 1
+                successfulQueries: 1
+                failedQueries: 0
+                totalResults: 1
+                inputYaml: "version: 1\nqueries:\n  - id: ja-review\n    q: WoW Forever 感想\n"
+                startedAt: '2026-10-01T02:10:00.000Z'
+                completedAt: '2026-10-01T02:10:15.000Z'
+                createdAt: '2026-10-01T02:10:00.000Z'
+                visibility: public
+                queryResults:
+                  - id: ja-review
+                    sourceQueryId: ja-review
+                    query: WoW Forever 感想
+                    relevanceLanguage: ja
+                    regionCode: JP
+                    status: success
+                    resultCount: 1
+                    errorCode: null
+                    errorMessage: null
+                    startedAt: '2026-10-01T02:10:01.000Z'
+                    completedAt: '2026-10-01T02:10:03.000Z'
+                    videos:
+                      - videoId: dQw4w9WgXcQ
+                        title: WoW Forever Gameplay Review
+                        channelId: UC1234567890
+                        channelTitle: GameChannel
+                        publishedAt: '2026-09-28T14:00:00.000Z'
+                        description: An in-depth review of WoW Forever in Japanese.
+                        url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+                        thumbnailUrl: https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Search run not found or not marked as public.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Not Found
+                message: Search run not found or not public
+        '429':
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Authoritative storage unavailable; cached data is not returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/public/users/{userId}/query-sets/{querySetId}/search-runs:
+    get:
+      tags:
+        - Search Runs
+      summary: List Public Search Runs associated with a Query Set (convenience endpoint)
+      description: Convenience endpoint equivalent to GET /api/v1/public/users/{userId}/search-runs?querySetId={querySetId}. Returns Public Search Runs associated with this Query Set, independently of Query Set publication or continued existence.
+      operationId: listPublicSearchRunsByQuerySetV1
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The Firebase UID of the Query Set owner.
+          schema:
+            type: string
+          example: cabeceowei-uid-123
+        - name: querySetId
+          in: path
+          required: true
+          description: The unique identifier of the Query Set.
+          schema:
+            type: string
+          example: qs_1711892019_abc12
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of Search Runs to return (1-100, default 50). Existing behavior parses the integer prefix, clamps to 1-100, and uses 50 when parsing fails or the value is empty.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+          example: 50
+      responses:
+        '200':
+          description: Successfully retrieved list of search runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicSearchRunSummary'
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Authoritative storage unavailable; cached data is not returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/public/users/{userId}/search-runs:
+    get:
+      deprecated: true
+      tags:
+        - Search Runs
+      summary: List public Search Runs
+      description: Deprecated backward-compatible alias; new consumers should use the corresponding /api/v1/public/ path. No removal date is scheduled. Returns Public Search Run summaries for the specified user, ordered by startedAt descending, with no cursor or next-page token. Search Run visibility is independent of Query Set publication. Does not return input YAML or Video Result lists. If querySetId is provided, only Public Search Runs associated with that Query Set are returned; the Query Set need not still exist or be public.
       operationId: listPublicSearchRuns
       parameters:
         - name: userId
@@ -253,10 +505,11 @@ paths:
 
   /api/public/users/{userId}/search-runs/{runId}:
     get:
+      deprecated: true
       tags:
         - Search Runs
       summary: Get Public Search Run details
-      description: Returns the Public Search Run, including its executed YAML Search Definition, Query Results, and Video Results. The Search Run itself must have public visibility, independently of Query Set publication or continued existence.
+      description: Deprecated backward-compatible alias; new consumers should use the corresponding /api/v1/public/ path. No removal date is scheduled. Returns the Public Search Run, including its executed YAML Search Definition, Query Results, and Video Results. The Search Run itself must have public visibility, independently of Query Set publication or continued existence.
       operationId: getPublicSearchRunDetails
       parameters:
         - name: userId
@@ -345,10 +598,11 @@ paths:
 
   /api/public/users/{userId}/query-sets/{querySetId}/search-runs:
     get:
+      deprecated: true
       tags:
         - Search Runs
       summary: List Public Search Runs associated with a Query Set (convenience endpoint)
-      description: Backward-compatible convenience endpoint equivalent to GET /api/public/users/{userId}/search-runs?querySetId={querySetId}. Returns Public Search Runs associated with this Query Set, independently of Query Set publication or continued existence.
+      description: Deprecated backward-compatible alias; new consumers should use the corresponding /api/v1/public/ path. No removal date is scheduled. Backward-compatible convenience endpoint equivalent to GET /api/public/users/{userId}/search-runs?querySetId={querySetId}. Returns Public Search Runs associated with this Query Set, independently of Query Set publication or continued existence.
       operationId: listPublicSearchRunsByQuerySet
       parameters:
         - name: userId

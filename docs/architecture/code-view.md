@@ -16,7 +16,7 @@ server/
 ├── app.ts                  Express app, routes, auth and search orchestration
 ├── youtubeCredentials.ts   credential lifecycle, crypto, UID cache and REST storage
 ├── firestoreService.ts     shared persistence, public projections, and caches
-├── publicApi.ts            anonymous public API router
+├── publicApi.ts            legacy/v1 routers with shared Search Run handlers
 ├── publicApiMapper.ts      explicit Search Run v1 projections
 ├── firebaseAdmin.ts        Admin SDK and runtime configuration
 ├── yamlValidator.ts        parsed YAML validation
@@ -53,5 +53,7 @@ The statuses describe the current implementation boundary and are not quality sc
 - Search Run child-result and summary writes are awaited by the search route, but persistence helpers can catch and log Firestore failures. A completed JSON/SSE response therefore does not prove every history document was persisted.
 - The browser and server each have YAML validation code. This is a current source boundary; it does not establish that their accepted YAML rules are identical.
 - `openapi/public-api.yaml` is loaded by `server/app.ts` and exposed as `/openapi.json` and `/api-docs/`; the React `ApiDocsView` also fetches `/openapi.json`.
-- Public API v1 retains `/api/public` paths. Independent public DTOs in `src/types/publicApi.ts` do not derive from domain types; `src/types/index.ts` re-exports existing public type names for import compatibility. `FirestoreService` checks persisted visibility before calling the explicit Search Run mappers. Contract tests validate HTTP responses against the YAML and retain a baseline of established fields.
+- `server/app.ts` mounts the legacy public router at `/api/public` and the v1 Search Run router at `/api/v1/public`. Both use `registerPublicSearchRunRoutes` in `server/publicApi.ts`, existing service/mappers, and the same module-level per-IP limiter map. Query Set definition list/detail remain in the legacy router. Existing UI-generated URLs continue working as direct JSON responses.
+- Independent public DTOs in `src/types/publicApi.ts` do not derive from domain types; `src/types/index.ts` re-exports existing public type names for import compatibility. `FirestoreService` checks persisted visibility before calling the explicit Search Run mappers. Contract tests validate both prefixes against the YAML, compare alias responses/statuses/visibility and shared limiting, and retain a baseline of established fields.
+- New external Search Run consumers should use v1 URLs. Legacy Search Run paths are documented as deprecated aliases without a removal date; removal requires a separate OpenSpec change, migration guidance and period, and explicit release/deprecation notice. Breaking contracts require a new major URL version while retaining v1 during migration. The authoritative policy is in OpenAPI.
 - Domain-to-code mapping records where logical responsibilities live today. It does not imply that those responsibilities should become separate services, packages, directories, or deployment units.
