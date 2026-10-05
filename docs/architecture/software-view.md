@@ -56,6 +56,8 @@ flowchart LR
 
 `src/App.tsx` is a stateful coordinator for search, Query Sets, key settings, history, tab state, and API documentation navigation. Feature views are separate React components, while much of the data loading, API request, and SSE lifecycle remains in `App.tsx`. The app uses tab state rather than a URL router.
 
+The Search presentation uses `SearchWorkspace` for independently collapsible Query YAML and Search Result panels. At desktop widths the Search shell follows the dynamic viewport with a 720px minimum for short-window page access, and its remaining flex/grid height is distributed to independently scrolling content. Narrow screens retain stacked panels with bounded YAML content and page scrolling. Editor execution/validation actions and viewer exports remain outside long-content scrollers; supplemental notices, schema help, validation feedback, and Execution Monitor are bounded. Collapse hides mounted content and preserves child presentation state without affecting a Search Request; collapse preferences reset when the Search view unmounts. These are browser presentation boundaries, not new domain or runtime containers.
+
 ### Express API Application
 
 ```mermaid

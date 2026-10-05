@@ -56,9 +56,9 @@ export const YamlViewer: React.FC<YamlViewerProps> = ({
   const lineNumbers = Array.from({ length: Math.max(lineCount, 15) }, (_, i) => i + 1);
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-sm">
+    <div className="yaml-viewer flex flex-col min-h-0 min-w-0 flex-1 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-sm">
       {/* Header Bar */}
-      <div className="px-4 py-3 bg-zinc-950/70 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+      <div className="shrink-0 px-4 py-3 bg-zinc-950/70 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-zinc-400" />
           <h2 className="text-sm font-semibold text-zinc-200">Output YAML</h2>
@@ -70,7 +70,7 @@ export const YamlViewer: React.FC<YamlViewerProps> = ({
         </div>
 
         {/* Controls: Tab Toggle, Copy, Download */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           {/* View Toggle Tabs */}
           {outputYaml && (
             <div className="flex items-center p-0.5 bg-zinc-800/80 rounded-lg border border-zinc-700/50">
@@ -138,8 +138,8 @@ export const YamlViewer: React.FC<YamlViewerProps> = ({
 
       {/* Summary Banner if results present */}
       {summary && (
-        <div className="px-4 py-2 bg-zinc-950/90 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-          <div className="flex items-center gap-4">
+        <div className="shrink-0 px-4 py-2 bg-zinc-950/90 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex flex-wrap items-center gap-4">
             <span className="text-zinc-400 flex items-center gap-1">
               <Layers className="w-3.5 h-3.5 text-zinc-500" />
               Queries: <strong className="text-zinc-200">{summary.queries}</strong>
@@ -162,7 +162,7 @@ export const YamlViewer: React.FC<YamlViewerProps> = ({
       )}
 
       {/* Content Area */}
-      <div className="relative flex-1 min-h-[360px] bg-zinc-950 overflow-hidden flex flex-col">
+      <div className="viewer-body relative min-h-0 min-w-0 bg-zinc-950 overflow-hidden flex flex-col">
         {!outputYaml ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-zinc-500">
             <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-3">
@@ -174,25 +174,25 @@ export const YamlViewer: React.FC<YamlViewerProps> = ({
             </p>
           </div>
         ) : activeTab === 'preview' ? (
-          <div className="flex-1 p-4 overflow-y-auto">
+          <div className="min-h-0 flex-1 p-4 overflow-auto" tabIndex={0} role="region" aria-label="Video cards">
             <VideoCardsPreview results={results} errors={errors} />
           </div>
         ) : (
-          <div className="flex-1 flex font-mono text-xs overflow-hidden">
+          <div className="min-h-0 flex-1 flex font-mono text-xs overflow-auto" tabIndex={0} role="region" aria-label="Output YAML content">
             {/* Line Numbers */}
             <div
               aria-hidden="true"
-              className="w-12 py-3 text-right pr-2 text-zinc-600 bg-zinc-950/80 border-r border-zinc-800/80 select-none overflow-hidden font-mono leading-relaxed"
+              className="sticky left-0 z-10 self-start min-h-full w-12 shrink-0 py-3 text-right pr-2 text-zinc-600 bg-zinc-950 border-r border-zinc-800/80 select-none overflow-hidden font-mono leading-relaxed"
             >
               {lineNumbers.map((num) => (
-                <div key={num} className="text-[11px]">
+                <div key={num} className="text-xs leading-relaxed">
                   {num}
                 </div>
               ))}
             </div>
 
             {/* Read-only Code View */}
-            <pre className="flex-1 p-3 text-zinc-200 overflow-auto font-mono text-xs leading-relaxed selection:bg-red-500/30 selection:text-white">
+            <pre className="flex-1 p-3 text-zinc-200 font-mono text-xs leading-relaxed selection:bg-red-500/30 selection:text-white">
               <code>{outputYaml}</code>
             </pre>
           </div>
@@ -200,7 +200,7 @@ export const YamlViewer: React.FC<YamlViewerProps> = ({
       </div>
 
       {/* Footer Info */}
-      <div className="px-4 py-2 bg-zinc-950/90 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+      <div className="shrink-0 px-4 py-2 bg-zinc-950/90 border-t border-zinc-800 flex flex-wrap gap-2 items-center justify-between text-[11px] text-zinc-500 font-mono">
         <div>
           {outputYaml ? (
             <span>Generated as normalized YAML · utf-8</span>

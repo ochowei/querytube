@@ -48,6 +48,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
   onSave,
   onSaveAs,
 }) => {
+  const gutterRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
@@ -97,12 +98,12 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
   );
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-sm">
+    <div className="yaml-editor flex flex-col min-h-0 min-w-0 flex-1 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-sm">
       {/* Query Set Status & Persistence Bar */}
-      <div className="px-4 py-2 bg-zinc-950 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="shrink-0 px-4 py-2 bg-zinc-950 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap min-w-0 items-center gap-2">
           <span className="text-[11px] font-mono text-zinc-400">{activeQuerySet ? 'Query Set:' : 'Definition:'}</span>
-          <span className="text-xs font-semibold text-zinc-100">
+          <span className="text-xs font-semibold text-zinc-100 break-all">
             {activeQuerySet ? activeQuerySet.name : 'Unsaved YAML Search Definition'}
           </span>
           {hasUnsavedChanges && (
@@ -150,7 +151,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
       </div>
 
       {/* Editor Sub-Header Bar */}
-      <div className="px-4 py-2.5 bg-zinc-950/60 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+      <div className="shrink-0 px-4 py-2.5 bg-zinc-950/60 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <FileCode className="w-4 h-4 text-zinc-400" />
           <h2 className="text-xs font-semibold text-zinc-300">YAML Search Definition</h2>
@@ -251,7 +252,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
 
       {/* Optional Schema Help Drawer */}
       {showHelp && (
-        <div className="bg-zinc-950 border-b border-zinc-800 p-3.5 text-xs text-zinc-400 space-y-2">
+        <div className="editor-help shrink-0 overflow-auto bg-zinc-950 border-b border-zinc-800 p-3.5 text-xs text-zinc-400 space-y-2">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-zinc-200">YAML Schema Specification</span>
             <button
@@ -285,7 +286,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
 
       {/* Editor Body with Drag & Drop & Line Numbers */}
       <div
-        className={`relative flex-1 min-h-[350px] flex font-mono text-xs overflow-hidden ${
+        className={`editor-body relative flex min-h-0 min-w-0 font-mono text-xs overflow-hidden ${
           isDragging ? 'ring-2 ring-red-500 bg-red-950/10' : 'bg-zinc-950'
         }`}
         onDragOver={handleDragOver}
@@ -302,11 +303,12 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
 
         {/* Line Numbers Gutter */}
         <div
+          ref={gutterRef}
           aria-hidden="true"
-          className="w-10 py-3 text-right pr-2 text-zinc-600 bg-zinc-950/80 border-r border-zinc-800/80 select-none overflow-hidden font-mono leading-relaxed"
+          className="w-10 shrink-0 py-3 text-right pr-2 text-zinc-600 bg-zinc-950/80 border-r border-zinc-800/80 select-none overflow-hidden font-mono leading-relaxed"
         >
           {lineNumbers.map((num) => (
-            <div key={num} className="text-[11px]">
+            <div key={num} className="text-xs leading-relaxed">
               {num}
             </div>
           ))}
@@ -315,19 +317,24 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
         {/* Textarea */}
         <textarea
           id={textareaId}
+          aria-label="YAML Search Definition"
+          wrap="off"
+          onScroll={(event) => {
+            if (gutterRef.current) gutterRef.current.scrollTop = event.currentTarget.scrollTop;
+          }}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={`# Paste your YAML here or drop a .yaml file\nversion: 1\ndefaults:\n  max_results: 10\nqueries:\n  - id: sample\n    q: "example query"\n`}
           spellCheck={false}
           disabled={isRunning}
-          className="flex-1 p-3 bg-transparent text-zinc-100 placeholder-zinc-600 resize-none outline-none font-mono text-xs leading-relaxed overflow-y-auto selection:bg-red-500/30 selection:text-white"
+          className="min-h-0 min-w-0 flex-1 p-3 bg-transparent text-zinc-100 placeholder-zinc-600 resize-none outline-none font-mono text-xs leading-relaxed overflow-auto selection:bg-red-500/30 selection:text-white"
         />
       </div>
 
       {/* Validation Feedback Banner */}
-      <div className="px-4 py-2.5 bg-zinc-950/90 border-t border-zinc-800 flex flex-col gap-2">
+      <div className="editor-feedback shrink-0 px-4 py-2.5 bg-zinc-950/90 border-t border-zinc-800 space-y-2 overflow-auto">
         {validation.valid ? (
-          <div className="flex items-center justify-between text-xs text-emerald-400">
+          <div className="flex flex-wrap gap-2 items-center justify-between text-xs text-emerald-400">
             <div className="flex items-center gap-1.5">
               <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
               <span>YAML is valid &amp; ready to search</span>
@@ -369,49 +376,50 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
           </div>
         )}
 
-        {/* Bottom Toolbar: Query Count, Estimated Calls, Validate, Run Search */}
-        <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
-          {/* Metrics */}
-          <div className="flex items-center gap-3 text-xs text-zinc-400 font-mono">
-            <div className="flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Queries:</span>
-              <strong className="text-zinc-200">{validation.valid ? validation.queryCount : 0}</strong>
-            </div>
-            <span className="text-zinc-700">|</span>
-            <div className="flex items-center gap-1.5">
-              <span>Estimated API Calls:</span>
-              <strong className="text-zinc-200">{validation.valid ? validation.queryCount : 0}</strong>
-            </div>
-          </div>
+      </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onValidate}
-              disabled={isRunning || !value.trim()}
-              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-            >
-              Validate
-            </button>
-
-            <button
-              type="button"
-              onClick={onRunSearch}
-              disabled={!canRunSearch}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer ${
-                isRunning
-                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                  : !canRunSearch
-                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
-                  : 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/20 hover:shadow'
-              }`}
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>{isRunning ? 'Searching...' : 'Run Search'}</span>
-            </button>
+      {/* Bottom Toolbar: Query Count, Estimated Calls, Validate, Run Search */}
+      <div className="editor-actions shrink-0 px-4 py-2.5 bg-zinc-950/90 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
+        {/* Metrics */}
+        <div className="flex items-center gap-3 text-xs text-zinc-400 font-mono">
+          <div className="flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-zinc-500" />
+            <span>Queries:</span>
+            <strong className="text-zinc-200">{validation.valid ? validation.queryCount : 0}</strong>
           </div>
+          <span className="text-zinc-700">|</span>
+          <div className="flex items-center gap-1.5">
+            <span>Estimated API Calls:</span>
+            <strong className="text-zinc-200">{validation.valid ? validation.queryCount : 0}</strong>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onValidate}
+            disabled={isRunning || !value.trim()}
+            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+          >
+            Validate
+          </button>
+
+          <button
+            type="button"
+            onClick={onRunSearch}
+            disabled={!canRunSearch}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer ${
+              isRunning
+                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                : !canRunSearch
+                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
+                : 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/20 hover:shadow'
+            }`}
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>{isRunning ? 'Searching...' : 'Run Search'}</span>
+          </button>
         </div>
       </div>
     </div>

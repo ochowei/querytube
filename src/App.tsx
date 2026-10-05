@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { Header, AppTab } from './components/Header';
+import { SearchWorkspace } from './components/SearchWorkspace';
 import { YamlEditor } from './components/YamlEditor';
 import { YamlViewer } from './components/YamlViewer';
 import { QueryStatusList, QueryProgressItem } from './components/QueryStatusList';
@@ -850,7 +851,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-red-500/20 selection:text-red-200">
+    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-red-500/20 selection:text-red-200 ${activeTab === 'search' ? 'search-shell' : ''}`}>
       {/* Top Navigation & Status */}
       <Header
         activeTab={activeTab}
@@ -863,63 +864,67 @@ export default function App() {
       />
 
       {/* Main Content Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4">
-        {/* Global Error Notice */}
-        {globalError && (
-          <div className="bg-red-950/40 border border-red-900/60 p-3 rounded-lg text-xs text-red-200 flex items-start justify-between gap-3 shadow-sm animate-in fade-in duration-200">
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-red-300">Notice</p>
-                <p className="text-red-200/90 mt-0.5 font-mono text-[11px] whitespace-pre-wrap">
-                  {globalError}
-                </p>
+      <main className="app-main flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4">
+        {(globalError || successNotice || manualValidationNotice) && (
+          <div className="search-notices flex flex-col gap-4">
+            {/* Global Error Notice */}
+            {globalError && (
+              <div className="bg-red-950/40 border border-red-900/60 p-3 rounded-lg text-xs text-red-200 flex items-start justify-between gap-3 shadow-sm animate-in fade-in duration-200">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-red-300">Notice</p>
+                    <p className="text-red-200/90 mt-0.5 font-mono text-[11px] whitespace-pre-wrap">
+                      {globalError}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setGlobalError(null)}
+                  className="text-red-400 hover:text-red-200 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-            </div>
-            <button
-              onClick={() => setGlobalError(null)}
-              className="text-red-400 hover:text-red-200 transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+            )}
 
-        {/* Success Notice */}
-        {successNotice && (
-          <div className="bg-emerald-950/40 border border-emerald-900/60 p-3 rounded-lg text-xs text-emerald-200 flex items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-              <span className="font-mono">{successNotice}</span>
-            </div>
-            <button
-              onClick={() => setSuccessNotice(null)}
-              className="text-emerald-400 hover:text-emerald-200 transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+            {/* Success Notice */}
+            {successNotice && (
+              <div className="bg-emerald-950/40 border border-emerald-900/60 p-3 rounded-lg text-xs text-emerald-200 flex items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span className="font-mono">{successNotice}</span>
+                </div>
+                <button
+                  onClick={() => setSuccessNotice(null)}
+                  className="text-emerald-400 hover:text-emerald-200 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
-        {/* Manual Validate Notice */}
-        {manualValidationNotice && (
-          <div className="bg-emerald-950/40 border border-emerald-900/60 p-3 rounded-lg text-xs text-emerald-200 flex items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-              <span className="font-mono">{manualValidationNotice}</span>
-            </div>
-            <button
-              onClick={() => setManualValidationNotice(null)}
-              className="text-emerald-400 hover:text-emerald-200 transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            {/* Manual Validate Notice */}
+            {manualValidationNotice && (
+              <div className="bg-emerald-950/40 border border-emerald-900/60 p-3 rounded-lg text-xs text-emerald-200 flex items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span className="font-mono">{manualValidationNotice}</span>
+                </div>
+                <button
+                  onClick={() => setManualValidationNotice(null)}
+                  className="text-emerald-400 hover:text-emerald-200 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* Tab 1: Search View */}
         {activeTab === 'search' && (
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="search-view flex-1 flex flex-col gap-4">
             {userApiKeyStatusError && (
               <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-xs text-amber-200">
                 <span>{userApiKeyStatusError}</span>
@@ -947,37 +952,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Query Progress Monitor (Visible during or after search) */}
-            {progressQueries.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
-                    <Terminal className="w-3.5 h-3.5 text-zinc-400" />
-                    <span>Execution Monitor</span>
-                  </div>
-                  {isRunning && (
-                    <button
-                      type="button"
-                      onClick={handleCancelSearch}
-                      className="text-xs text-red-400 hover:text-red-300 underline underline-offset-2 cursor-pointer font-mono"
-                    >
-                      Cancel search
-                    </button>
-                  )}
-                </div>
-                <QueryStatusList
-                  queries={progressQueries}
-                  isRunning={isRunning}
-                  completedCount={completedCount}
-                  totalCount={progressQueries.length}
-                />
-              </div>
-            )}
-
-            {/* Two-Column Desktop Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 flex-1 min-h-[580px]">
-              {/* Left Column: Input YAML with Query Set Bar */}
-              <section className="flex flex-col h-full min-h-[460px]">
+            <SearchWorkspace
+              editor={
                 <YamlEditor
                   value={yamlInput}
                   onChange={setYamlInput}
@@ -993,17 +969,45 @@ export default function App() {
                   onSave={handleTriggerSave}
                   onSaveAs={handleTriggerSaveAs}
                 />
-              </section>
-
-              {/* Right Column: Output YAML & Video Card Preview */}
-              <section className="flex flex-col h-full min-h-[460px]">
-                <YamlViewer
-                  outputYaml={outputYaml}
-                  outputData={outputData}
-                  isRunning={isRunning}
-                />
-              </section>
-            </div>
+              }
+              results={
+                <>
+                  {/* Query Progress Monitor (visible during or after search) */}
+                  {progressQueries.length > 0 && (
+                    <div className="search-monitor space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
+                          <Terminal className="w-3.5 h-3.5 text-zinc-400" />
+                          <span>Execution Monitor</span>
+                        </div>
+                        {isRunning && (
+                          <button
+                            type="button"
+                            onClick={handleCancelSearch}
+                            className="text-xs text-red-400 hover:text-red-300 underline underline-offset-2 cursor-pointer font-mono"
+                          >
+                            Cancel search
+                          </button>
+                        )}
+                      </div>
+                      <div className="search-monitor-content">
+                        <QueryStatusList
+                          queries={progressQueries}
+                          isRunning={isRunning}
+                          completedCount={completedCount}
+                          totalCount={progressQueries.length}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <YamlViewer
+                    outputYaml={outputYaml}
+                    outputData={outputData}
+                    isRunning={isRunning}
+                  />
+                </>
+              }
+            />
           </div>
         )}
 

@@ -80,7 +80,7 @@ export const QueryStatusList: React.FC<QueryStatusListProps> = ({
       </div>
 
       {/* Individual Query Status List */}
-      <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 font-mono text-xs select-text">
+      <div className="query-status-items max-h-48 overflow-y-auto space-y-1.5 pr-1 font-mono text-xs select-text">
         {queries.map((q) => {
           let iconContent;
           let textColor = 'text-zinc-400';
