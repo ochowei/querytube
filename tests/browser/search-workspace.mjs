@@ -62,6 +62,8 @@ try {
   assert.equal(await button('Expand Query YAML').getAttribute('aria-expanded'), 'false');
   assert(await page.locator('textarea').isHidden());
   assert((await panel('Search Result').boundingBox()).width > oldWidth * 1.5);
+  assert.equal(Math.round((await panel('Search Result').boundingBox()).width), Math.round((await page.locator('.search-panels').boundingBox()).width));
+  assert.equal(await button('Expand Query YAML').evaluate(e => getComputedStyle(e).writingMode), 'horizontal-tb');
   await screenshot('desktop-query-collapsed');
   await button('Cards (120)').click();
   const cards = panel('Video cards');
@@ -70,11 +72,17 @@ try {
   await button('Collapse Search Result').click();
   assert(await cards.isHidden());
   assert(await button('Expand Query YAML').isVisible() && await button('Expand Search Result').isVisible());
+  await page.getByText('Both panels are hidden. Show a panel above to continue.').waitFor();
+  await screenshot('desktop-both-collapsed');
   await button('Expand Search Result').click();
   assert(await cards.isVisible());
   assert.equal(await cards.evaluate(e => e.scrollTop), 1500);
   await button('Expand Query YAML').click();
   assert((await page.locator('textarea').inputValue()).includes('query-1199'));
+  await button('Collapse Search Result').click();
+  assert.equal(Math.round((await panel('Query YAML').boundingBox()).width), Math.round((await page.locator('.search-panels').boundingBox()).width));
+  await screenshot('desktop-results-collapsed');
+  await button('Expand Search Result').click();
   await button('Run Search').click();
   assert(await button('Copy YAML').isDisabled());
   await button('Collapse Search Result').click();

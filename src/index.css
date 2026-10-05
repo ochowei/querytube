@@ -46,6 +46,12 @@
 
 /* Search owns a bounded workspace on desktop; other feature views retain page flow. */
 .search-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.search-panels {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
@@ -76,23 +82,23 @@
     max-height: 18dvh;
     overflow: auto;
   }
-  .search-workspace {
+  .search-workspace { flex: 1; min-height: 0; }
+  .search-panels {
     flex: 1;
     min-height: 0;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     gap: 1.25rem;
   }
-  .search-workspace[data-query-collapsed="true"] { grid-template-columns: 3rem minmax(0, 1fr); }
-  .search-workspace[data-results-collapsed="true"] { grid-template-columns: minmax(0, 1fr) 3rem; }
-  .search-workspace[data-query-collapsed="true"][data-results-collapsed="true"] { grid-template-columns: 3rem 3rem; }
-  .search-panel-content { flex: 1; }
-  .search-panel[data-collapsed="true"] .search-panel-toggle {
-    height: 100%;
-    justify-content: flex-start;
-    padding: 0.75rem;
-    writing-mode: vertical-rl;
+  .search-workspace[data-query-collapsed="true"] .search-panels,
+  .search-workspace[data-results-collapsed="true"] .search-panels {
+    grid-template-columns: minmax(0, 1fr);
   }
+  .search-panel[data-collapsed="true"],
+  .search-workspace[data-query-collapsed="true"][data-results-collapsed="true"] .search-panels {
+    display: none;
+  }
+  .search-panel-content { flex: 1; }
   .editor-body, .viewer-body { height: auto; flex: 1 1 0%; }
   .editor-body { min-height: 48px; }
   .editor-help { max-height: 120px; min-height: 0; flex-shrink: 1; }

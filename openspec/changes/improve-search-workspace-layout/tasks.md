@@ -9,6 +9,10 @@
 
 - [x] 2.1 Run existing Node tests, TypeScript check, application build, documentation checks/build, and strict OpenSpec validation; record results and inspect desktop/mobile screenshots and short-window behavior before completing the change.
 
+## 3. Collapse presentation refinement
+
+- [x] 3.1 Replace desktop vertical rails with horizontal Show/Hide controls and full-width remaining content, preserve mobile headers and mounted child state, update architecture views, and verify browser regression checks, typecheck, build, documentation build/check, and strict OpenSpec validation.
+
 ## Verification record
 
 - Base: latest origin/main `e110d33`, fast-forwarded from a clean checkout on 2026-10-05.
@@ -19,3 +23,9 @@
 - `tests/browser/search-workspace.mjs`: passed with bundled Playwright and existing Chromium. Covered 2,402 input lines, 6,000 output lines, 120 card groups, 1,200 execution entries, independent scrolling and aligned gutters, Copy/Download byte equality, keyboard collapse, both panels collapsed, restored scroll/tab/input state, running/cancel availability, and empty/invalid/missing-key states. Actual App/Header and Search SSE composition were exercised with mock auth/API responses, including 1,200 completion events and navigation away from/back to Search with retained input/results. The final run had no console or page errors.
 - Viewports: desktop 1440x900, 1280x720, 1024x768; short window 1440x480; narrow widths 320, 390, 768, and 1023; desktop/mobile resizing with collapsed panels. Inspected desktop/mobile, collapse, cards/monitor, short-window, and crowded help/validation/setup screenshots. Final crowded App check also covers the manual Validate notice at 1024x720.
 - No real Firebase session or YouTube request was used by the runner. No commit, push, or deployment. Change remains completed and unarchived for review, following existing completed active-change precedent; canonical spec synchronization belongs to later finalization.
+
+### Collapse refinement verification
+
+- Replaced vertical desktop rails with a horizontal Show/Hide toolbar. Verified either remaining panel exactly matches the workspace width, restore controls use horizontal writing, and both-hidden state retains controls and an empty-state hint.
+- Full browser regression passed on the existing local dev server, including mobile headers, desktop/mobile resize, keyboard restore, hidden-state persistence, long content, and crowded action visibility. Inspected screenshots for left hidden, right hidden, both hidden, and mobile layouts.
+- Typecheck, application build, documentation build/check (46 pages / 3,017 links), strict OpenSpec validation, and diff whitespace checks passed. No dependencies, authentication configuration, commits, pushes, or deployments were added by this refinement.

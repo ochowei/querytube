@@ -33,6 +33,11 @@ Each panel SHALL provide a keyboard-operable, named expand/collapse control expo
 - **THEN** each restore control remains accessible, and YAML values and selected result presentation are retained
 - **AND** collapsing a panel does not cancel a running Search Request
 
+#### Scenario: Desktop collapse presentation
+- **WHEN** a desktop user collapses a panel
+- **THEN** its restore control remains in a horizontal workspace toolbar, without a vertical text rail
+- **AND** the remaining expanded panel uses the full available workspace width
+
 ### Requirement: Narrow viewport flow
 Narrow viewports SHALL retain stacked panels and page scrolling with bounded input and result content, wrapping action controls without horizontal page overflow. Collapse controls SHALL remain usable with touch and keyboard after viewport changes.
 
