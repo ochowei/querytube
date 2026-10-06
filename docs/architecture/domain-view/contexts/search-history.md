@@ -34,11 +34,12 @@ Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
 
 - `SearchRun`: run ID, optional Query Set ID/name, status, counts, input YAML, timestamps, visibility.
 - `QueryResultItem`: source query, success/failure, count, error fields, execution times, videos.
-- `StoredVideoItem`: YouTube video identifiers, title, channel metadata, publication time, description, URL, and thumbnail.
+- `StoredVideoItem`: YouTube video identifiers, title, channel metadata, publication time, description, URL, thumbnail, and an optional Video Statistics Snapshot (`statistics`).
 - Firestore path `users/{uid}/searchRuns/{runId}/queryResults/{queryResultId}/videos/{videoId}`.
 
 ## Business Rules / Invariants
 
+- Snapshots live in the existing video documents as a nested map of decimal string/null counts and `fetchedAt`. Both REST owner reads and Admin public reads restore the snapshot; reconstructed Output YAML includes the same nested camel-case object. Legacy records omit it. Reads never fetch from YouTube or refresh counts, and subsequent Search Runs write independent snapshots.
 - Every authenticated Search Run is stored below its owner's UID.
 - A new Search Run starts with status `running` and defaults to private visibility.
 - Run visibility is independent of the referenced Query Set's `publicApiEnabled` flag.

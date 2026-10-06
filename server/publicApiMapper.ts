@@ -55,6 +55,14 @@ export function toPublicSearchRun(details: SearchRunDetails): PublicSearchRun {
         description: v.description,
         url: v.url,
         thumbnailUrl: v.thumbnailUrl,
+        ...(v.statistics ? {
+          statistics: {
+            viewCount: v.statistics.viewCount,
+            likeCount: v.statistics.likeCount,
+            commentCount: v.statistics.commentCount,
+            fetchedAt: v.statistics.fetchedAt,
+          },
+        } : {}),
       })),
     })),
   };

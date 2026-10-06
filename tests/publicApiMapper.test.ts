@@ -37,3 +37,23 @@ test('public projections preserve nullable metadata and required empty video arr
   assert.equal(detail.queryResults[0].relevanceLanguage, null);
   assert.deepEqual(detail.queryResults[0].videos, []);
 });
+
+test('statistics projection selects only documented fields and omits absent legacy snapshots', () => {
+  const internal = structuredClone(runFixture);
+  const video = internal.queryResults[0].videos![0];
+  assert.equal('statistics' in toPublicSearchRun(internal).queryResults[0].videos[0], false);
+  video.statistics = {
+    viewCount: '18446744073709551615', likeCount: '0', commentCount: null,
+    fetchedAt: '2026-10-06T02:00:00.000Z',
+  };
+  Object.assign(video.statistics, { internalSource: 'private', apiKey: 'secret' });
+  const snapshot = toPublicSearchRun(internal).queryResults[0].videos[0].statistics!;
+  assert.deepEqual(snapshot, {
+    viewCount: '18446744073709551615', likeCount: '0', commentCount: null,
+    fetchedAt: '2026-10-06T02:00:00.000Z',
+  });
+  assert.notEqual(snapshot, video.statistics);
+  snapshot.viewCount = '1';
+  assert.equal(video.statistics.viewCount, '18446744073709551615');
+  assert.equal('statistics' in toPublicSearchRunSummary(internal), false);
+});

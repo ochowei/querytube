@@ -12,7 +12,7 @@ Turn a valid YAML Search Definition into a Search Result and deliver it to the s
 - Apply query-level parameters over YAML defaults and call YouTube Data API v3.
 - Execute multiple query items with a maximum of three concurrent workers.
 - Return either one JSON response or Server-Sent Events (SSE) for start, per-query progress, and completion.
-- Convert YouTube response items into Video Results within Query Outcomes.
+- Convert YouTube response items into Video Results within Query Outcomes and fetch Video Statistics Snapshots during execution.
 - Start historical recording and send each Query Outcome to Search History.
 
 ## Out of Scope
@@ -33,7 +33,7 @@ Shared product terms follow the [canonical glossary](../../../../CONTEXT.md).
 
 ## Core Concepts
 
-Executing a Query sends its search instruction to the YouTube search endpoint. This describes a process rather than a separate shared domain entity.
+Executing a Query sends its search instruction to the YouTube search endpoint, then enriches returned videos through `videos.list(part=statistics)`. This describes a process rather than a separate shared domain entity.
 
 - `QueryConfig` and `YamlDefaults`.
 - `QuerySuccessResult` / `QueryErrorResult`.
@@ -44,6 +44,8 @@ Executing a Query sends its search instruction to the YouTube search endpoint. T
 - Search requires a verified Firebase identity and a configured YouTube API key for that UID.
 - The server parses and validates YAML before creating the Search Run or calling YouTube.
 - Search parameters resolve from each query first, then YAML defaults, then executor defaults (`max_results: 10`, `order: relevance`, `safe_search: moderate`). The request currently fixes YouTube `type` to `video`.
+- Statistics are requested in batches of at most 50 IDs using the owner's key. A request-scoped promise cache reuses snapshots for repeated videos across concurrent queries; new Search Runs fetch independently. `fetchedAt` records when the statistics response was decoded, not the Search Run start time.
+- Counts are decimal strings or null when unavailable. Missing videos and failed statistics requests leave snapshots absent without turning successful searches into failures. Empty searches do not request statistics.
 - No more than three query executions are active in the server's concurrency runner at once.
 - Query failures are retained alongside successful outcomes; the final status is `completed` if none failed, `partial` if at least one succeeded and one failed, or `failed` if all failed.
 - A search may use unsaved YAML; `querySetId` and `querySetName` are optional association metadata.
@@ -70,6 +72,7 @@ Executing a Query sends its search instruction to the YouTube search endpoint. T
 
 ## Related Code
 
+- [YouTube query execution](../../../../server/youtubeSearch.ts) and [run-scoped statistics fetching](../../../../server/youtubeStatistics.ts).
 - [Search validation and execution routes](../../../../server/app.ts).
 - [Server YAML validator](../../../../server/yamlValidator.ts) and [browser validator](../../../../src/utils/yamlValidator.ts).
 - [Search Run/result persistence](../../../../server/firestoreService.ts).

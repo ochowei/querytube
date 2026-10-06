@@ -44,6 +44,8 @@ function toFirestoreFields(obj: Record<string, any>): Record<string, FirestoreVa
       }
     } else if (typeof value === 'boolean') {
       fields[key] = { booleanValue: value };
+    } else if (typeof value === 'object' && !Array.isArray(value)) {
+      fields[key] = { mapValue: { fields: toFirestoreFields(value) } };
     }
   }
   return fields;
@@ -64,6 +66,8 @@ function fromFirestoreFields(fields: Record<string, FirestoreValue> | undefined)
       result[key] = val.booleanValue;
     } else if ('nullValue' in val) {
       result[key] = null;
+    } else if ('mapValue' in val) {
+      result[key] = fromFirestoreFields(val.mapValue.fields);
     }
   }
   return result;
@@ -374,6 +378,7 @@ export class FirestoreService {
             description: rawV.description || '',
             url: rawV.url || `https://www.youtube.com/watch?v=${rawV.videoId || vDoc.id}`,
             thumbnailUrl: rawV.thumbnailUrl || '',
+            ...(rawV.statistics ? { statistics: rawV.statistics } : {}),
           };
         });
 
@@ -419,6 +424,7 @@ export class FirestoreService {
             description: v.description,
             url: v.url,
             thumbnail_url: v.thumbnailUrl,
+            ...(v.statistics ? { statistics: v.statistics } : {}),
           })),
         })),
         errors: failed.map((f) => ({
@@ -842,6 +848,7 @@ export class FirestoreService {
             description: v.description,
             url: v.url,
             thumbnail_url: v.thumbnailUrl,
+            ...(v.statistics ? { statistics: v.statistics } : {}),
           })),
         })),
         errors: failed.map((f) => ({
@@ -1067,6 +1074,7 @@ export class FirestoreService {
             description: rawV.description || '',
             url: rawV.url || `https://www.youtube.com/watch?v=${rawV.videoId || vId}`,
             thumbnailUrl: rawV.thumbnailUrl || '',
+            ...(rawV.statistics ? { statistics: rawV.statistics } : {}),
           };
         });
 
@@ -1113,6 +1121,7 @@ export class FirestoreService {
             description: v.description,
             url: v.url,
             thumbnail_url: v.thumbnailUrl,
+            ...(v.statistics ? { statistics: v.statistics } : {}),
           })),
         })),
         errors: failed.map((f) => ({

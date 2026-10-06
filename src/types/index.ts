@@ -36,6 +36,14 @@ export interface SearchRun {
   visibility: ResourceVisibility;
 }
 
+export interface VideoStatisticsSnapshot {
+  // Decimal strings preserve YouTube count precision; null means unavailable.
+  viewCount: string | null;
+  likeCount: string | null;
+  commentCount: string | null;
+  fetchedAt: string;
+}
+
 export interface StoredVideoItem {
   videoId: string;
   title: string;
@@ -45,6 +53,7 @@ export interface StoredVideoItem {
   description: string;
   url: string;
   thumbnailUrl: string;
+  statistics?: VideoStatisticsSnapshot;
 }
 
 export interface QueryResultItem {

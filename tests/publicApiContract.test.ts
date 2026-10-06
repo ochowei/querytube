@@ -229,6 +229,55 @@ test('anonymous HTTP detail exposes stable YouTube sources and handles legacy UR
   assert.equal(legacy.queryResults[0].videos[0].publishedAt, '');
 });
 
+test('v1 and legacy aliases expose historical snapshots while existing clients and old records remain valid', async (t) => {
+  const { requestBoth, records, reads, user } = await setupHttp(t);
+  const legacy = await requestBoth(detailPath);
+  const extractSources = (detail: any) => detail.queryResults.flatMap((q: any) =>
+    q.videos.map(({ videoId, url, title }: any) => ({ videoId, url, title })));
+  const oldSources = extractSources(legacy);
+  assert.equal('statistics' in legacy.queryResults[0].videos[0], false);
+  const snapshot = {
+    viewCount: '9007199254740993', likeCount: '0', commentCount: null,
+    fetchedAt: '2026-10-06T02:00:00.000Z',
+  };
+  const video = records.get(`${user}/searchRuns/${runFixture.id}/queryResults/query-one/videos/dQw4w9WgXcQ`)!;
+  video.statistics = { ...snapshot, internalMetadata: 'must-not-leak' };
+  const detail = await requestBoth(detailPath);
+  assert.deepEqual(detail.queryResults[0].videos[0].statistics, snapshot);
+  assert.deepEqual(extractSources(detail), oldSources, 'existing v1 source-import clients see identical fields');
+  // Validate against the pre-addition Video contract; unknown optional fields pass.
+  const oldVideoSchema = structuredClone(contract.components.schemas.Video);
+  delete oldVideoSchema.properties.statistics;
+  validate(oldVideoSchema, detail.queryResults[0].videos[0]);
+  assert.deepEqual(contract.components.schemas.Video.required, Object.keys(oldVideoSchema.properties));
+  assert.equal(contract.info.version, '1.2.0');
+  assert.equal(reads.some((path) => path.includes('youtube')), false);
+  const summary = await requestBoth(listPath);
+  assert.equal('statistics' in summary.items[0], false);
+  assert.equal('queryResults' in summary.items[0], false);
+  delete video.statistics;
+  const older = await requestBoth(detailPath);
+  assert.equal('statistics' in older.queryResults[0].videos[0], false);
+  assert.deepEqual(extractSources(older), oldSources);
+});
+
+test('statistics schema enforces nullable decimal strings and a fetched timestamp without requiring snapshots on videos', () => {
+  const schemas = contract.components.schemas;
+  assert.equal(schemas.Video.required.includes('statistics'), false);
+  const snapshot = { viewCount: '0', likeCount: null, commentCount: '18446744073709551615', fetchedAt: '2026-10-06T02:00:00.000Z' };
+  validate(schemas.VideoStatisticsSnapshot, snapshot);
+  validate(schemas.VideoStatisticsSnapshot, schemas.VideoStatisticsSnapshot.example);
+  for (const field of ['viewCount', 'likeCount', 'commentCount', 'fetchedAt']) {
+    const missing: Record<string, unknown> = { ...snapshot };
+    delete missing[field];
+    assert.throws(() => validate(schemas.VideoStatisticsSnapshot, missing), /required/);
+  }
+  for (const value of [0, -1, '-1', '1.5', 'NaN', '', '1e3']) {
+    assert.throws(() => validate(schemas.VideoStatisticsSnapshot, { ...snapshot, viewCount: value }));
+  }
+  assert.throws(() => validate(schemas.VideoStatisticsSnapshot, { ...snapshot, fetchedAt: 'yesterday' }), /timestamp/);
+});
+
 test('HTTP lists preserve cap/default/parsing/order/filter and convenience semantics without cursors', async (t) => {
   const { requestBoth: request, addRun, reads } = await setupHttp(t);
   for (let i = 0; i < 105; i++) {

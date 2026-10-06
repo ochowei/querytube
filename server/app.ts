@@ -8,7 +8,8 @@ import { FirestoreReadError, FirestoreService, FirestoreWriteError } from './fir
 import { createPublicApiRouter, createPublicApiV1Router, PUBLIC_API_BASE_PATH, PUBLIC_API_V1_BASE_PATH } from './publicApi.js';
 import { configureUserYouTubeApiKey, getUserYouTubeApiKey, removeUserYouTubeApiKey } from './youtubeCredentials.js';
 import { validateParsedYaml } from './yamlValidator.js';
-import type { QueryConfig, YamlDefaults } from './yamlValidator.js';
+import { executeYouTubeQuery, type QuerySuccessResult, type QueryErrorResult } from './youtubeSearch.js';
+import { createStatisticsFetcher } from './youtubeStatistics.js';
 import { adminAuth, adminDb, firebaseProjectId, firestoreDatabaseId, isVercelRuntime } from './firebaseAdmin.js';
 
 export { validateParsedYaml } from './yamlValidator.js';
@@ -103,57 +104,6 @@ if (openapiDocument) {
 app.use(PUBLIC_API_BASE_PATH, createPublicApiRouter(firestoreService));
 app.use(PUBLIC_API_V1_BASE_PATH, createPublicApiV1Router(firestoreService));
 
-interface VideoResult {
-  video_id: string;
-  title: string;
-  channel_id: string;
-  channel_title: string;
-  published_at: string;
-  description: string;
-  url: string;
-  thumbnail_url: string;
-}
-
-interface QuerySuccessResult {
-  id: string;
-  query: string;
-  relevance_language?: string;
-  region_code?: string;
-  count: number;
-  videos: VideoResult[];
-}
-
-interface QueryErrorResult {
-  id: string;
-  query: string;
-  error: string;
-}
-
-function decodeHtmlEntities(str: string): string {
-  if (!str) return '';
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#(\d+);/g, (_, dec) => {
-      try {
-        return String.fromCharCode(parseInt(dec, 10));
-      } catch {
-        return _;
-      }
-    })
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
-      try {
-        return String.fromCharCode(parseInt(hex, 16));
-      } catch {
-        return _;
-      }
-    });
-}
-
 // Concurrency runner (limit 3 concurrent requests)
 async function runWithConcurrency<T, R>(
   items: T[],
@@ -172,130 +122,6 @@ async function runWithConcurrency<T, R>(
 
   await Promise.all(workers);
   return results;
-}
-
-// Single query executor using user's YouTube API key
-async function executeYouTubeQuery(
-  query: QueryConfig,
-  defaults: YamlDefaults | undefined,
-  apiKey: string
-): Promise<{ success: boolean; result?: QuerySuccessResult; error?: QueryErrorResult }> {
-  const maxResults = query.max_results ?? defaults?.max_results ?? 10;
-  const order = query.order ?? defaults?.order ?? 'relevance';
-  const safeSearch = query.safe_search ?? defaults?.safe_search ?? 'moderate';
-  const relevanceLanguage = query.relevance_language;
-  const regionCode = query.region_code;
-  const publishedAfter = query.published_after;
-  const publishedBefore = query.published_before;
-
-  const url = new URL('https://www.googleapis.com/youtube/v3/search');
-  url.searchParams.set('part', 'snippet');
-  url.searchParams.set('type', 'video');
-  url.searchParams.set('key', apiKey);
-  url.searchParams.set('q', query.q);
-  url.searchParams.set('maxResults', String(Math.min(50, Math.max(1, maxResults))));
-  url.searchParams.set('order', order);
-  url.searchParams.set('safeSearch', safeSearch);
-
-  if (relevanceLanguage) {
-    url.searchParams.set('relevanceLanguage', relevanceLanguage);
-  }
-  if (regionCode) {
-    url.searchParams.set('regionCode', regionCode);
-  }
-  if (publishedAfter) {
-    url.searchParams.set('publishedAfter', publishedAfter);
-  }
-  if (publishedBefore) {
-    url.searchParams.set('publishedBefore', publishedBefore);
-  }
-
-  try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!response.ok) {
-      let errorMessage = `HTTP ${response.status} ${response.statusText}`;
-      try {
-        const errorData = (await response.json()) as any;
-        if (errorData?.error?.message) {
-          errorMessage = errorData.error.message;
-        }
-      } catch {
-        // fallback
-      }
-      return {
-        success: false,
-        error: {
-          id: query.id,
-          query: query.q,
-          error: errorMessage,
-        },
-      };
-    }
-
-    const data = (await response.json()) as any;
-    const items = Array.isArray(data.items) ? data.items : [];
-
-    const videos: VideoResult[] = items.map((item: any) => {
-      const videoId = item?.id?.videoId || '';
-      const snippet = item?.snippet || {};
-      const thumbnails = snippet?.thumbnails || {};
-      const thumbnailUrl =
-        thumbnails.high?.url ||
-        thumbnails.medium?.url ||
-        thumbnails.default?.url ||
-        '';
-
-      return {
-        video_id: videoId,
-        title: decodeHtmlEntities(snippet.title || ''),
-        channel_id: snippet.channelId || '',
-        channel_title: decodeHtmlEntities(snippet.channelTitle || ''),
-        published_at: snippet.publishedAt || '',
-        description: decodeHtmlEntities(snippet.description || ''),
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        thumbnail_url: thumbnailUrl,
-      };
-    });
-
-    const successResult: QuerySuccessResult = {
-      id: query.id,
-      query: query.q,
-      count: videos.length,
-      videos,
-    };
-
-    if (relevanceLanguage) {
-      successResult.relevance_language = relevanceLanguage;
-    }
-    if (regionCode) {
-      successResult.region_code = regionCode;
-    }
-
-    return {
-      success: true,
-      result: successResult,
-    };
-  } catch (err: any) {
-    let msg = err?.message || 'Network request failed';
-    if (err?.name === 'TimeoutError' || err?.message?.includes('timeout')) {
-      msg = 'Request timed out after 15 seconds.';
-    }
-    return {
-      success: false,
-      error: {
-        id: query.id,
-        query: query.q,
-        error: msg,
-      },
-    };
-  }
 }
 
 // User YouTube API Key Settings Endpoints
@@ -624,6 +450,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
   const searchConfig = validation.parsed;
   const queries = searchConfig.queries;
   const defaults = searchConfig.defaults;
+  const fetchStatistics = createStatisticsFetcher(apiKey);
 
   // 1. Create a historical Search Run document in Firestore with status 'running'
   let runId = `run_${Date.now()}`;
@@ -672,7 +499,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
       );
 
       const qStartedAt = new Date().toISOString();
-      const outcome = await executeYouTubeQuery(query, defaults, apiKey);
+      const outcome = await executeYouTubeQuery(query, defaults, apiKey, fetchStatistics);
       const qCompletedAt = new Date().toISOString();
       completedCount++;
 
@@ -700,6 +527,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
                 description: v.description,
                 url: v.url,
                 thumbnailUrl: v.thumbnail_url,
+                ...(v.statistics ? { statistics: v.statistics } : {}),
               })),
             })
             .catch((e) => console.warn('[Firestore saveQueryResult error]:', e))
@@ -809,7 +637,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
 
   const outcomes = await runWithConcurrency(queries, 3, async (query) => {
     const qStartedAt = new Date().toISOString();
-    const outcome = await executeYouTubeQuery(query, defaults, apiKey);
+    const outcome = await executeYouTubeQuery(query, defaults, apiKey, fetchStatistics);
     const qCompletedAt = new Date().toISOString();
 
     if (outcome.success && outcome.result) {
@@ -834,6 +662,7 @@ app.post('/api/youtube/search', requireAuth, async (req: Request, res: Response)
               description: v.description,
               url: v.url,
               thumbnailUrl: v.thumbnail_url,
+              ...(v.statistics ? { statistics: v.statistics } : {}),
             })),
           })
           .catch((e) => console.warn('[Firestore saveQueryResult error]:', e))

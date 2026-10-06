@@ -25,7 +25,7 @@ A person can act in more than one role.
 |---|---|
 | Firebase Authentication | Provides Google sign-in and Firebase ID tokens; QueryTube verifies protected requests against it. |
 | Cloud Firestore | Stores user-owned YouTube credentials, Query Sets, Search Runs, query outcomes, and videos. |
-| YouTube Data API v3 | Verifies user-provided keys and supplies search results. |
+| YouTube Data API v3 | Verifies user-provided keys and supplies search results and video statistics observed during Search Runs. |
 | Google Cloud / YouTube API configuration | Lets the YouTube API administrator configure the project, API enablement, key restrictions, and quota used by YouTube Data API. It is administration/configuration context rather than an application runtime request path. |
 | Vercel | The repository configures it to host the QueryTube web application and API runtime. The [Deployment View](deployment-view.md) describes that topology and notes what live deployment state cannot be inferred from source. |
 
@@ -52,7 +52,7 @@ flowchart LR
   User -->|Google sign-in| FirebaseAuth
   QT -->|Verifies protected request tokens| FirebaseAuth
   QT -->|Stores user data and reads public data| Firestore
-  QT -->|Verifies keys and searches videos| YouTube
+  QT -->|Verifies keys, searches videos and fetches statistics| YouTube
   Developer -->|Runs locally| QT
   FirebaseAdmin -->|Administers| FirebaseAuth
   FirebaseAdmin -->|Administers| Firestore

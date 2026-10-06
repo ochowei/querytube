@@ -38,7 +38,7 @@ export function fakePublicStore(uid: string) {
     records.set(`${user}/searchRuns/${id}`, { ...run, ...overrides });
   }
   addRun(runFixture.id, { querySetId: 'deleted-set' });
-  for (const { videos, ...query } of runFixture.queryResults) {
+  for (const { videos, ...query } of structuredClone(runFixture).queryResults) {
     const queryPath = `${user}/searchRuns/${runFixture.id}/queryResults/${query.id}`;
     records.set(queryPath, query);
     for (const video of videos ?? []) records.set(`${queryPath}/videos/${video.videoId}`, video);

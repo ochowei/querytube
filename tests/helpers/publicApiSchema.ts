@@ -6,7 +6,7 @@ import { load } from 'js-yaml';
 export const contract = load(readFileSync(new URL('../../openapi/public-api.yaml', import.meta.url), 'utf8')) as any;
 const supported = new Set([
   '$ref', 'type', 'required', 'properties', 'items', 'enum', 'const', 'anyOf',
-  'format', 'minimum', 'maximum', 'default', 'description', 'example',
+  'format', 'pattern', 'minimum', 'maximum', 'default', 'description', 'example',
 ]);
 
 export function checkSchema(schema: any): void {
@@ -17,6 +17,7 @@ export function checkSchema(schema: any): void {
   if (schema.type) {
     for (const type of [schema.type].flat()) assert.ok(['object', 'array', 'string', 'integer', 'null'].includes(type));
   }
+  if (schema.pattern) assert.doesNotThrow(() => new RegExp(schema.pattern));
   if (schema.format) assert.ok(['date-time', 'uri'].includes(schema.format), `Unsupported format: ${schema.format}`);
   for (const key of schema.required ?? []) assert.ok(key in schema.properties, `Undefined required property: ${key}`);
   for (const child of Object.values(schema.properties ?? {})) checkSchema(child);
@@ -47,6 +48,7 @@ export function validate(schema: any, value: any, path = '$'): void {
       try { validate(child, value, path); return true; } catch { return false; }
     }), `${path}: no matching alternative`);
   }
+  if (typeof value === 'string' && schema.pattern) assert.match(value, new RegExp(schema.pattern), `${path}: pattern`);
   if (typeof value === 'string' && schema.format === 'date-time') {
     assert.match(value, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i, `${path}: timestamp`);
     assert.ok(Number.isFinite(Date.parse(value)), `${path}: invalid timestamp`);

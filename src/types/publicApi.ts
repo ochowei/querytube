@@ -56,6 +56,13 @@ export interface PublicQueryResult {
   videos: PublicVideo[];
 }
 
+export interface PublicVideoStatisticsSnapshot {
+  viewCount: string | null;
+  likeCount: string | null;
+  commentCount: string | null;
+  fetchedAt: string;
+}
+
 export interface PublicVideo {
   videoId: string;
   title: string;
@@ -65,4 +72,5 @@ export interface PublicVideo {
   description: string;
   url: string;
   thumbnailUrl: string;
+  statistics?: PublicVideoStatisticsSnapshot;
 }

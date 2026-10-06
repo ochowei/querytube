@@ -35,6 +35,9 @@ The Search History record of one Query Outcome within a Search Run, including it
 **Video Result**:
 A YouTube video returned for a Query and included in that Query's outcome.
 
+**Video Statistics Snapshot**:
+The YouTube counts observed for a Video Result during one Search Run, together with their observation time. They are historical facts of that run, independent of later changes on YouTube.
+
 **Output YAML**:
 A normalized YAML representation reconstructed from a Search Run and its Query Results.
 
